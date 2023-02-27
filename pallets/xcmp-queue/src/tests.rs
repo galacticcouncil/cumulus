@@ -16,6 +16,7 @@
 use super::*;
 use cumulus_primitives_core::XcmpMessageHandler;
 use frame_support::{assert_noop, assert_ok};
+use frame_system::EventRecord;
 use mock::{new_test_ext, RuntimeCall, RuntimeOrigin, Test, XcmpQueue};
 use sp_runtime::traits::BadOrigin;
 
@@ -161,6 +162,19 @@ fn defer_xcm_execution_works() {
 		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
 
 		assert_eq!(DeferredXcmMessages::<Test>::get(ParaId::from(999), 6), Some(versioned_xcm));
+
+		assert_last_event::<Test>(
+			Event::XcmDeferred {
+				sender: ParaId::from(999),
+				sent_at: 1u32.into(),
+				deferred_to: 6u32.into(),
+				message_hash: Some([
+					228, 157, 66, 161, 219, 179, 248, 222, 134, 22, 43, 135, 170, 145, 86, 178,
+					246, 58, 75, 16, 107, 167, 137, 119, 187, 28, 136, 35, 11, 58, 172, 232,
+				]),
+			}
+			.into(),
+		);
 	});
 }
 
@@ -358,4 +372,12 @@ fn xcmp_queue_consumes_dest_and_msg_on_ok_validate() {
 			)
 		);
 	});
+}
+
+fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
+	let events = frame_system::Pallet::<T>::events();
+	let system_event: <T as frame_system::Config>::RuntimeEvent = generic_event.into();
+	// compare to the last event record
+	let EventRecord { event, .. } = &events[events.len() - 1];
+	assert_eq!(event, &system_event);
 }

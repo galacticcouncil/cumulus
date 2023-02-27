@@ -72,6 +72,24 @@ const MAX_MESSAGES_PER_BLOCK: u8 = 10;
 // Maximum amount of messages that can exist in the overweight queue at any given time.
 const MAX_OVERWEIGHT_MESSAGES: u32 = 1000;
 
+pub trait XcmDeferFilter<TRuntimeCall> {
+	fn deferred_by(
+		para: ParaId,
+		sent_at: RelayBlockNumber,
+		xcm: &Xcm<TRuntimeCall>,
+	) -> Option<RelayBlockNumber>;
+}
+
+impl<TRuntimeCall> XcmDeferFilter<TRuntimeCall> for () {
+	fn deferred_by(
+		para: ParaId,
+		sent_at: RelayBlockNumber,
+		xcm: &Xcm<TRuntimeCall>,
+	) -> Option<RelayBlockNumber> {
+		None
+	}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -109,6 +127,9 @@ pub mod pallet {
 
 		/// The price for delivering an XCM to a sibling parachain destination.
 		type PriceForSiblingDelivery: PriceForSiblingDelivery;
+
+		/// Filter logic to defer XCM message
+		type XcmDeferFilter: XcmDeferFilter<Self::RuntimeCall>;
 
 		/// The weight information of this pallet.
 		type WeightInfo: WeightInfo;
@@ -643,11 +664,10 @@ impl<T: Config> Pallet<T> {
 		log::debug!("Processing XCMP-XCM: {:?}", &hash);
 		let (result, event) = match Xcm::<T::RuntimeCall>::try_from(versioned_xcm.clone()) {
 			Ok(xcm) => {
-				let filtered = |sender, sent_at, xcm| true;
 				let location = (Parent, Parachain(sender.into()));
 
-				if filtered(sender, sent_at, &xcm) {
-					let deferred_to = sent_at + 5;
+				if let Some(defer_by) = T::XcmDeferFilter::deferred_by(sender, sent_at, &xcm) {
+					let deferred_to = sent_at + defer_by;
 					DeferredXcmMessages::<T>::insert(sender, sent_at + 5, versioned_xcm);
 					(
 						Ok(Weight::zero()),

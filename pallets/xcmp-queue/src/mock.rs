@@ -195,6 +195,18 @@ impl<RuntimeOrigin: OriginTrait> ConvertOrigin<RuntimeOrigin>
 	}
 }
 
+pub struct XcmDeferFilterMock;
+
+impl XcmDeferFilter<RuntimeCall> for XcmDeferFilterMock {
+	fn deferred_by(
+		para: ParaId,
+		sent_at: RelayBlockNumber,
+		xcm: &Xcm<RuntimeCall>,
+	) -> Option<RelayBlockNumber> {
+		Some(5)
+	}
+}
+
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type XcmExecutor = xcm_executor::XcmExecutor<XcmConfig>;
@@ -205,9 +217,15 @@ impl Config for Test {
 	type ControllerOriginConverter = SystemParachainAsSuperuser<RuntimeOrigin>;
 	type WeightInfo = ();
 	type PriceForSiblingDelivery = ();
+	type XcmDeferFilter = XcmDeferFilterMock;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	t.into()
+
+	let mut r: sp_io::TestExternalities = t.into();
+
+	r.execute_with(|| System::set_block_number(1));
+
+	r
 }
