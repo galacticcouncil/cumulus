@@ -301,6 +301,13 @@ pub mod pallet {
 		},
 		/// An XCM from the overweight queue was executed with the given actual weight used.
 		OverweightServiced { index: OverweightIndex, used: Weight },
+		/// Some XCM was deferred for later execution
+		XcmDeferred {
+			sender: ParaId,
+			sent_at: RelayBlockNumber,
+			deferred_to: RelayBlockNumber,
+			message_hash: Option<XcmHash>,
+		},
 	}
 
 	#[pallet::error]
@@ -332,6 +339,18 @@ pub mod pallet {
 		RelayBlockNumber,
 		Vec<u8>,
 		ValueQuery,
+	>;
+
+	/// Inbound aggregate XCMP messages. It can only be one per ParaId/block.
+	#[pallet::storage]
+	pub(super) type DeferredXcmMessages<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		ParaId,
+		Twox64Concat,
+		RelayBlockNumber,
+		VersionedXcm<T::RuntimeCall>,
+		OptionQuery,
 	>;
 
 	/// The non-empty XCMP channels in order of becoming non-empty, and the index of the first
@@ -616,31 +635,53 @@ impl<T: Config> Pallet<T> {
 
 	fn handle_xcm_message(
 		sender: ParaId,
-		_sent_at: RelayBlockNumber,
-		xcm: VersionedXcm<T::RuntimeCall>,
+		sent_at: RelayBlockNumber,
+		versioned_xcm: VersionedXcm<T::RuntimeCall>,
 		max_weight: Weight,
 	) -> Result<Weight, XcmError> {
-		let hash = xcm.using_encoded(sp_io::hashing::blake2_256);
+		let hash = versioned_xcm.using_encoded(sp_io::hashing::blake2_256);
 		log::debug!("Processing XCMP-XCM: {:?}", &hash);
-		let (result, event) = match Xcm::<T::RuntimeCall>::try_from(xcm) {
+		let (result, event) = match Xcm::<T::RuntimeCall>::try_from(versioned_xcm.clone()) {
 			Ok(xcm) => {
+				let filtered = |sender, sent_at, xcm| true;
 				let location = (Parent, Parachain(sender.into()));
 
-				match T::XcmExecutor::execute_xcm(location, xcm, hash, max_weight) {
-					Outcome::Error(e) => (
-						Err(e),
-						Event::Fail { message_hash: Some(hash), error: e, weight: Weight::zero() },
-					),
-					Outcome::Complete(w) =>
-						(Ok(w), Event::Success { message_hash: Some(hash), weight: w }),
-					// As far as the caller is concerned, this was dispatched without error, so
-					// we just report the weight used.
-					Outcome::Incomplete(w, e) =>
-						(Ok(w), Event::Fail { message_hash: Some(hash), error: e, weight: w }),
+				if filtered(sender, sent_at, &xcm) {
+					let deferred_to = sent_at + 5;
+					DeferredXcmMessages::<T>::insert(sender, sent_at + 5, versioned_xcm);
+					(
+						Ok(Weight::zero()),
+						Event::XcmDeferred {
+							sender,
+							sent_at,
+							deferred_to,
+							message_hash: Some(hash),
+						},
+					)
+				} else {
+					match T::XcmExecutor::execute_xcm(location, xcm, hash, max_weight) {
+						Outcome::Error(e) => (
+							Err(e),
+							Event::Fail {
+								message_hash: Some(hash),
+								error: e,
+								weight: Weight::zero(),
+							},
+						),
+						Outcome::Complete(w) => {
+							(Ok(w), Event::Success { message_hash: Some(hash), weight: w })
+						},
+						// As far as the caller is concerned, this was dispatched without error, so
+						// we just report the weight used.
+						Outcome::Incomplete(w, e) => {
+							(Ok(w), Event::Fail { message_hash: Some(hash), error: e, weight: w })
+						},
+					}
 				}
 			},
-			Err(()) =>
-				(Err(XcmError::UnhandledXcmVersion), Event::BadVersion { message_hash: Some(hash) }),
+			Err(()) => {
+				(Err(XcmError::UnhandledXcmVersion), Event::BadVersion { message_hash: Some(hash) })
+			},
 		};
 		Self::deposit_event(event);
 		result

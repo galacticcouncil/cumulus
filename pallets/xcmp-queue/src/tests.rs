@@ -147,6 +147,24 @@ fn suspend_xcm_execution_works() {
 }
 
 #[test]
+fn defer_xcm_execution_works() {
+	new_test_ext().execute_with(|| {
+		let assets = MultiAssets::new();
+		let versioned_xcm = VersionedXcm::from(Xcm::<RuntimeCall>(vec![
+			Instruction::<RuntimeCall>::ReserveAssetDeposited(assets),
+		]));
+		let xcm = versioned_xcm.encode();
+		let mut message_format = XcmpMessageFormat::ConcatenatedVersionedXcm.encode();
+		message_format.extend(xcm.clone());
+		let messages = vec![(ParaId::from(999), 1u32.into(), message_format.as_slice())];
+
+		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
+
+		assert_eq!(DeferredXcmMessages::<Test>::get(ParaId::from(999), 6), Some(versioned_xcm));
+	});
+}
+
+#[test]
 fn update_suspend_threshold_works() {
 	new_test_ext().execute_with(|| {
 		let data: QueueConfigData = <QueueConfig<Test>>::get();
