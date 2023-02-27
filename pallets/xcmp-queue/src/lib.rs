@@ -664,6 +664,7 @@ impl<T: Config> Pallet<T> {
 		log::debug!("Processing XCMP-XCM: {:?}", &hash);
 		let (result, event) = match Xcm::<T::RuntimeCall>::try_from(versioned_xcm.clone()) {
 			Ok(xcm) => {
+				let filtered = |sender, sent_at, xcm| true;
 				let location = (Parent, Parachain(sender.into()));
 
 				if let Some(defer_by) = T::XcmDeferFilter::deferred_by(sender, sent_at, &xcm) {
