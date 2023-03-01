@@ -20,6 +20,8 @@ use frame_system::EventRecord;
 use mock::{new_test_ext, RuntimeCall, RuntimeOrigin, Test, XcmpQueue};
 use sp_runtime::traits::BadOrigin;
 use sp_runtime::BoundedVec;
+use crate::mock::System;
+
 #[test]
 fn one_message_does_not_panic() {
 	new_test_ext().execute_with(|| {
@@ -211,10 +213,10 @@ fn handle_xcmp_messages_should_be_able_to_store_multiple_messages_at_same_block(
 	});
 }
 
-/*
 #[test]
-fn defer_xcm_execution_should_store_message_inbound_status_details() {
+fn deferred_xcm_should_be_executed_and_removed_from_storage() {
 	new_test_ext().execute_with(|| {
+		//Arrange
 		let assets = MultiAssets::new();
 		let versioned_xcm = VersionedXcm::from(Xcm::<RuntimeCall>(vec![
 			Instruction::<RuntimeCall>::ReserveAssetDeposited(assets),
@@ -224,11 +226,15 @@ fn defer_xcm_execution_should_store_message_inbound_status_details() {
 		message_format.extend(xcm.clone());
 		let messages = vec![(ParaId::from(999), 1u32.into(), message_format.as_slice())];
 
+		//Act
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+		System::set_block_number(6);
 		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
 
-		assert_eq!(DeferredXcmMessages::<Test>::get(6), Some(create_bounded_vec(vec![versioned_xcm])));
+		//Assert
+		assert_eq!(DeferredXcmMessages::<Test>::get(6), None);
 	});
-}*/
+}
 
 fn create_bounded_vec(schedule_ids: Vec<VersionedXcm<RuntimeCall>>) -> BoundedVec<VersionedXcm<RuntimeCall>, ConstU32<20>> {
 	let bounded_vec: BoundedVec<VersionedXcm<RuntimeCall>, sp_runtime::traits::ConstU32<20>> = schedule_ids.try_into().unwrap();

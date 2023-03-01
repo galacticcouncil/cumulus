@@ -992,6 +992,11 @@ impl<T: Config> Pallet<T> {
 		weight_used
 	}
 
+	fn service_deferred_queue(max_weight: Weight) -> Weight {
+		//TODO: add logic for handling
+		max_weight
+	}
+
 	fn suspend_channel(target: ParaId) {
 		<OutboundXcmpStatus<T>>::mutate(|s| {
 			if let Some(details) = s.iter_mut().find(|item| item.recipient == target) {
@@ -1095,6 +1100,7 @@ impl<T: Config> XcmpMessageHandler for Pallet<T> {
 		status.sort();
 		<InboundXcmpStatus<T>>::put(status);
 
+		//Self::service_deferred(max_weight)
 		Self::service_xcmp_queue(max_weight)
 	}
 }
