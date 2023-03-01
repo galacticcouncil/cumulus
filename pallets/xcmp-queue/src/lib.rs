@@ -146,7 +146,7 @@ pub mod pallet {
 
 		fn on_idle(_now: T::BlockNumber, max_weight: Weight) -> Weight {
 			// on_idle processes additional messages with any remaining block weight.
-			Self::service_xcmp_queue(max_weight)
+			Self::service_xcmp_queue(max_weight, MAX_MESSAGES_PER_BLOCK)
 		}
 	}
 
@@ -667,23 +667,25 @@ impl<T: Config> Pallet<T> {
 			Ok(xcm) => {
 				let location = (Parent, Parachain(sender.into()));
 
+				// Consider handling in process_xcmp_message to avoid deffering twice / complexity 
+				// Extract to function
+
 				if let Some(defer_by) = T::XcmDeferFilter::deferred_by(sender, sent_at, &xcm) {
 					let deferred_to = sent_at + defer_by;
 
-					if !DeferredXcmMessages::<T>::contains_key(sent_at + 5) {
-						let xcm_messages = vec![versioned_xcm];
-
-						let xcm_messages_bounded_vec: BoundedVec<VersionedXcm<T::RuntimeCall>, ConstU32<20>> =
-							xcm_messages.try_into().map_err(|_|XcmError::HoldingWouldOverflow)?;
-
-						DeferredXcmMessages::<T>::insert(sent_at + 5, xcm_messages_bounded_vec);
-					} else {
+					if DeferredXcmMessages::<T>::contains_key(sent_at + 5) {
 						DeferredXcmMessages::<T>::try_mutate(sent_at + 5, |xcm_messages| -> Result<(),XcmError>  {
 							let mutable_messages = xcm_messages.as_mut().ok_or(XcmError::HoldingWouldOverflow)?;
 							mutable_messages.try_push(versioned_xcm).map_err(|_|XcmError::HoldingWouldOverflow)?;
 
 							Ok(())
 						})?;
+					} else {
+						let xcm_messages = vec![versioned_xcm];
+						let xcm_messages_bounded_vec: BoundedVec<VersionedXcm<T::RuntimeCall>, ConstU32<20>> =
+							xcm_messages.try_into().map_err(|_|XcmError::HoldingWouldOverflow)?;
+
+						DeferredXcmMessages::<T>::insert(sent_at + 5, xcm_messages_bounded_vec);
 					}
 
 					(
@@ -695,6 +697,7 @@ impl<T: Config> Pallet<T> {
 							message_hash: Some(hash),
 						},
 					)
+
 				} else {
 					match T::XcmExecutor::execute_xcm(location, xcm, hash, max_weight) {
 						Outcome::Error(e) => (
@@ -878,9 +881,8 @@ impl<T: Config> Pallet<T> {
 	/// half of the `max_weight` available for the first page, then a quarter plus the remainder
 	/// for the second &c. though empirical and or practical factors may give rise to adjusting it
 	/// further.
-	fn service_xcmp_queue(max_weight: Weight) -> Weight {
+	fn service_xcmp_queue(max_weight: Weight, mut messages_processed: u8) -> Weight {
 		let suspended = QueueSuspended::<T>::get();
-		let mut messages_processed = 0;
 
 		let mut status = <InboundXcmpStatus<T>>::get(); // <- sorted.
 		if status.is_empty() {
@@ -992,9 +994,9 @@ impl<T: Config> Pallet<T> {
 		weight_used
 	}
 
-	fn service_deferred_queue(max_weight: Weight) -> Weight {
+	fn service_deferred_queue(max_weight: Weight, mut messages_processed: u8) -> (Weight, u8) {
 		//TODO: add logic for handling
-		max_weight
+		(max_weight, messages_processed)
 	}
 
 	fn suspend_channel(target: ParaId) {
@@ -1100,8 +1102,8 @@ impl<T: Config> XcmpMessageHandler for Pallet<T> {
 		status.sort();
 		<InboundXcmpStatus<T>>::put(status);
 
-		//Self::service_deferred(max_weight)
-		Self::service_xcmp_queue(max_weight)
+		let (max_weight, messages_processed) = Self::service_deferred_queue(max_weight, MAX_MESSAGES_PER_BLOCK);
+		Self::service_xcmp_queue(max_weight, messages_processed)
 	}
 }
 
