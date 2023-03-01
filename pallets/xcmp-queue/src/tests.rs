@@ -19,7 +19,7 @@ use frame_support::{assert_noop, assert_ok};
 use frame_system::EventRecord;
 use mock::{new_test_ext, RuntimeCall, RuntimeOrigin, Test, XcmpQueue};
 use sp_runtime::traits::BadOrigin;
-
+use sp_runtime::BoundedVec;
 #[test]
 fn one_message_does_not_panic() {
 	new_test_ext().execute_with(|| {
@@ -161,7 +161,7 @@ fn defer_xcm_execution_works() {
 
 		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
 
-		assert_eq!(DeferredXcmMessages::<Test>::get(ParaId::from(999), 6), Some(versioned_xcm));
+		assert_eq!(DeferredXcmMessages::<Test>::get(6), Some(create_bounded_vec(vec![versioned_xcm])));
 
 		assert_last_event::<Test>(
 			Event::XcmDeferred {
@@ -177,6 +177,87 @@ fn defer_xcm_execution_works() {
 		);
 	});
 }
+
+#[test]
+fn handle_xcmp_messages_should_be_able_to_store_multiple_messages_at_same_block() {
+	new_test_ext().execute_with(|| {
+		let assets = MultiAssets::new();
+		let versioned_xcm = VersionedXcm::from(Xcm::<RuntimeCall>(vec![
+			Instruction::<RuntimeCall>::ReserveAssetDeposited(assets),
+		]));
+
+		let xcm = versioned_xcm.encode();
+		let mut message_format = XcmpMessageFormat::ConcatenatedVersionedXcm.encode();
+		message_format.extend(xcm.clone());
+		let messages = vec![(ParaId::from(999), 1u32.into(), message_format.as_slice())];
+
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
+
+		assert_eq!(DeferredXcmMessages::<Test>::get(6), Some(create_bounded_vec(vec![versioned_xcm.clone(), versioned_xcm])));
+
+		assert_last_event::<Test>(
+			Event::XcmDeferred {
+				sender: ParaId::from(999),
+				sent_at: 1u32.into(),
+				deferred_to: 6u32.into(),
+				message_hash: Some([
+					228, 157, 66, 161, 219, 179, 248, 222, 134, 22, 43, 135, 170, 145, 86, 178,
+					246, 58, 75, 16, 107, 167, 137, 119, 187, 28, 136, 35, 11, 58, 172, 232,
+				]),
+			}
+				.into(),
+		);
+	});
+}
+
+/*
+#[test]
+fn defer_xcm_execution_should_store_message_inbound_status_details() {
+	new_test_ext().execute_with(|| {
+		let assets = MultiAssets::new();
+		let versioned_xcm = VersionedXcm::from(Xcm::<RuntimeCall>(vec![
+			Instruction::<RuntimeCall>::ReserveAssetDeposited(assets),
+		]));
+		let xcm = versioned_xcm.encode();
+		let mut message_format = XcmpMessageFormat::ConcatenatedVersionedXcm.encode();
+		message_format.extend(xcm.clone());
+		let messages = vec![(ParaId::from(999), 1u32.into(), message_format.as_slice())];
+
+		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
+
+		assert_eq!(DeferredXcmMessages::<Test>::get(6), Some(create_bounded_vec(vec![versioned_xcm])));
+	});
+}*/
+
+fn create_bounded_vec(schedule_ids: Vec<VersionedXcm<RuntimeCall>>) -> BoundedVec<VersionedXcm<RuntimeCall>, ConstU32<20>> {
+	let bounded_vec: BoundedVec<VersionedXcm<RuntimeCall>, sp_runtime::traits::ConstU32<20>> = schedule_ids.try_into().unwrap();
+	bounded_vec
+}
+
+
+/*
+#[test]
+fn deferred_xcm_should_be_removed_from_deferred_messages_in_a_consequent_execution() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let assets = MultiAssets::new();
+		let versioned_xcm = VersionedXcm::from(Xcm::<RuntimeCall>(vec![
+			Instruction::<RuntimeCall>::ReserveAssetDeposited(assets),
+		]));
+		let xcm = versioned_xcm.encode();
+		let mut message_format = XcmpMessageFormat::ConcatenatedVersionedXcm.encode();
+		message_format.extend(xcm.clone());
+		let messages = vec![(ParaId::from(999), 1u32.into(), message_format.as_slice())];
+
+		//Act
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
+
+		assert_eq!(DeferredXcmMessages::<Test>::get(ParaId::from(999), 6), None);
+
+	});
+}*/
 
 #[test]
 fn update_suspend_threshold_works() {

@@ -47,12 +47,15 @@ use frame_support::{
 	traits::{EnsureOrigin, Get},
 	weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, Weight},
 };
+use frame_support::dispatch::DispatchResult;
 use polkadot_runtime_common::xcm_sender::ConstantPrice;
 use rand_chacha::{
 	rand_core::{RngCore, SeedableRng},
 	ChaChaRng,
 };
 use scale_info::TypeInfo;
+use sp_core::bounded::BoundedVec;
+use sp_core::ConstU32;
 use sp_runtime::RuntimeDebug;
 use sp_std::{convert::TryFrom, prelude::*};
 use xcm::{latest::prelude::*, VersionedXcm, WrapVersion, MAX_XCM_DECODE_DEPTH};
@@ -364,13 +367,11 @@ pub mod pallet {
 
 	/// Inbound aggregate XCMP messages. It can only be one per ParaId/block.
 	#[pallet::storage]
-	pub(super) type DeferredXcmMessages<T: Config> = StorageDoubleMap<
+	pub(super) type DeferredXcmMessages<T: Config> = StorageMap<
 		_,
-		Blake2_128Concat,
-		ParaId,
 		Twox64Concat,
 		RelayBlockNumber,
-		VersionedXcm<T::RuntimeCall>,
+		BoundedVec<VersionedXcm<T::RuntimeCall>,ConstU32<20>>,
 		OptionQuery,
 	>;
 
@@ -668,7 +669,23 @@ impl<T: Config> Pallet<T> {
 
 				if let Some(defer_by) = T::XcmDeferFilter::deferred_by(sender, sent_at, &xcm) {
 					let deferred_to = sent_at + defer_by;
-					DeferredXcmMessages::<T>::insert(sender, sent_at + 5, versioned_xcm);
+
+					if !DeferredXcmMessages::<T>::contains_key(sent_at + 5) {
+						let xcm_messages = vec![versioned_xcm];
+
+						let xcm_messages_bounded_vec: BoundedVec<VersionedXcm<T::RuntimeCall>, ConstU32<20>> =
+							xcm_messages.try_into().map_err(|_|XcmError::HoldingWouldOverflow)?;
+
+						DeferredXcmMessages::<T>::insert(sent_at + 5, xcm_messages_bounded_vec);
+					} else {
+						DeferredXcmMessages::<T>::try_mutate(sent_at + 5, |xcm_messages| -> Result<(),XcmError>  {
+							let mutable_messages = xcm_messages.as_mut().ok_or(XcmError::HoldingWouldOverflow)?;
+							mutable_messages.try_push(versioned_xcm).map_err(|_|XcmError::HoldingWouldOverflow)?;
+
+							Ok(())
+						})?;
+					}
+
 					(
 						Ok(Weight::zero()),
 						Event::XcmDeferred {
