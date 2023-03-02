@@ -66,6 +66,9 @@ pub use pallet::*;
 /// Index used to identify overweight XCMs.
 pub type OverweightIndex = u64;
 
+/// List of deffered messages to process
+pub type DeferredMessageList<T: Config> = BoundedVec<(VersionedXcm<T::RuntimeCall>, ParaId), ConstU32<20>>;
+
 const LOG_TARGET: &str = "xcmp_queue";
 const DEFAULT_POV_SIZE: u64 = 64 * 1024; // 64 KB
 
@@ -146,7 +149,7 @@ pub mod pallet {
 
 		fn on_idle(_now: T::BlockNumber, max_weight: Weight) -> Weight {
 			// on_idle processes additional messages with any remaining block weight.
-			Self::service_xcmp_queue(max_weight, MAX_MESSAGES_PER_BLOCK)
+			Self::service_xcmp_queue(max_weight, 0)
 		}
 	}
 
@@ -371,7 +374,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		RelayBlockNumber,
-		BoundedVec<VersionedXcm<T::RuntimeCall>,ConstU32<20>>,
+		DeferredMessageList<T>,
 		OptionQuery,
 	>;
 
@@ -676,13 +679,13 @@ impl<T: Config> Pallet<T> {
 					if DeferredXcmMessages::<T>::contains_key(sent_at + 5) {
 						DeferredXcmMessages::<T>::try_mutate(sent_at + 5, |xcm_messages| -> Result<(),XcmError>  {
 							let mutable_messages = xcm_messages.as_mut().ok_or(XcmError::HoldingWouldOverflow)?;
-							mutable_messages.try_push(versioned_xcm).map_err(|_|XcmError::HoldingWouldOverflow)?;
+							mutable_messages.try_push((versioned_xcm,sender)).map_err(|_|XcmError::HoldingWouldOverflow)?;
 
 							Ok(())
 						})?;
 					} else {
-						let xcm_messages = vec![versioned_xcm];
-						let xcm_messages_bounded_vec: BoundedVec<VersionedXcm<T::RuntimeCall>, ConstU32<20>> =
+						let xcm_messages = vec![(versioned_xcm,sender)];
+						let xcm_messages_bounded_vec: DeferredMessageList<T> = 
 							xcm_messages.try_into().map_err(|_|XcmError::HoldingWouldOverflow)?;
 
 						DeferredXcmMessages::<T>::insert(sent_at + 5, xcm_messages_bounded_vec);
@@ -995,6 +998,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn service_deferred_queue(max_weight: Weight, mut messages_processed: u8) -> (Weight, u8) {
+		//let storedMessage = DeferredXcmMessages::<T>::take(6).unwrap_or_default();
+		//Self::handle_xcm_message(storedMessage., )
 		//TODO: add logic for handling
 		(max_weight, messages_processed)
 	}
@@ -1102,7 +1107,7 @@ impl<T: Config> XcmpMessageHandler for Pallet<T> {
 		status.sort();
 		<InboundXcmpStatus<T>>::put(status);
 
-		let (max_weight, messages_processed) = Self::service_deferred_queue(max_weight, MAX_MESSAGES_PER_BLOCK);
+		let (max_weight, messages_processed) = Self::service_deferred_queue(max_weight, 0);
 		Self::service_xcmp_queue(max_weight, messages_processed)
 	}
 }
