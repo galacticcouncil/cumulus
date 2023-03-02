@@ -60,6 +60,7 @@ use sp_runtime::RuntimeDebug;
 use sp_std::{convert::TryFrom, prelude::*};
 use xcm::{latest::prelude::*, VersionedXcm, WrapVersion, MAX_XCM_DECODE_DEPTH};
 use xcm_executor::traits::ConvertOrigin;
+use frame_support::storage::IterableStorageMap;
 
 pub use pallet::*;
 
@@ -1001,23 +1002,20 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn service_deferred_queue(max_weight: Weight, relay_chain_block_number: RelayBlockNumber, mut messages_processed: u8) -> (Weight, u8) {
-		let storedMessage = DeferredXcmMessages::<T>::take(6).unwrap_or_default();//TODO: improve? error handling
-		let first_message =storedMessage.first();//TODO: error handling
+		let deferred_xcmp_queue = DeferredXcmMessages::<T>::iter()
+		.filter(|(block_number, _)| block_number <= &relay_chain_block_number).collect::<Vec<_>>();
+		let len = deferred_xcmp_queue.len();
+		let mut consumedWeight = Weight::zero();
 
-		//TODO: only process the ones which has block number smaller than the reference
+		deferred_xcmp_queue.into_iter().take_while(|item| {
+			let result = Self::handle_xcm_message(item.0, 1u32.into(), item.1.clone(), max_weight);
+			if result.is_ok() {
+				DeferredXcmMessages::<T>::remove(id);
 
-		if let Some(message) = first_message {
-			let result = Self::handle_xcm_message(message.1, 1u32.into(),message.0.clone(),max_weight); //TODO: Don't clone and add error handling
-			match result {
-				Ok(weight) => {
-					let s = 3;
-				}
-				Err(err) => {
-					let s = 3;
-				}
 			}
-		}
-
+			messages_processed += 1;
+			messages_processed < MAX_MESSAGES_PER_BLOCK
+		});
 
 		//loop through old blocks and collect it to a list
 		//loop through the list messages stored in the block

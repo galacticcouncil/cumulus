@@ -230,6 +230,7 @@ fn handle_xcmp_messages_should_execute_deferred_message_and_remove_from_deferred
 		let messages = vec![(para_id, 1u32.into(), message_format.as_slice())];
 
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 
 		assert_eq!(DeferredXcmMessages::<Test>::get(6), Some(create_bounded_vec(vec![(versioned_xcm.clone(),para_id)])));
 
