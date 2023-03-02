@@ -215,7 +215,7 @@ fn handle_xcmp_messages_should_be_able_to_store_multiple_messages_at_same_block(
 }
 
 #[test]
-fn handle_xcmp_messages_should_execute() {
+fn handle_xcmp_messages_should_execute_deferred_message_and_remove_from_deferred_storage() {
 	new_test_ext().execute_with(|| {
 		let assets = MultiAssets::new();
 		let versioned_xcm = VersionedXcm::from(Xcm::<RuntimeCall>(vec![
@@ -231,9 +231,9 @@ fn handle_xcmp_messages_should_execute() {
 
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 
-		assert_eq!(DeferredXcmMessages::<Test>::get(6), Some(create_bounded_vec(vec![(versioned_xcm.clone(),para_id), (versioned_xcm,para_id)])));
+		assert_eq!(DeferredXcmMessages::<Test>::get(6), Some(create_bounded_vec(vec![(versioned_xcm.clone(),para_id)])));
 
-		XcmpQueue::service_deferred_queue(Weight::MAX, 0);
+		XcmpQueue::service_deferred_queue(Weight::MAX,7, 0);
 
 		assert_eq!(DeferredXcmMessages::<Test>::get(6), None);
 		assert_eq!(DeferredXcmMessages::<Test>::get(11), None);
