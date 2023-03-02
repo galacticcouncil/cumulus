@@ -180,8 +180,8 @@ impl<RuntimeOrigin: OriginTrait> ConvertOrigin<RuntimeOrigin>
 		kind: OriginKind,
 	) -> Result<RuntimeOrigin, MultiLocation> {
 		let origin = origin.into();
-		if kind == OriginKind::Superuser &&
-			matches!(
+		if kind == OriginKind::Superuser
+			&& matches!(
 				origin,
 				MultiLocation {
 					parents: 1,
