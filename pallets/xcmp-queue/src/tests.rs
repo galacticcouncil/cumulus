@@ -232,19 +232,39 @@ fn handle_xcmp_messages_should_execute_deferred_message_and_remove_from_deferred
 
 		assert_eq!(DeferredXcmMessages::<Test>::get(6), None);
 		assert_eq!(DeferredXcmMessages::<Test>::get(11), None);
+	});
+}
 
-		// assert_last_event::<Test>(
-		// 	Event::XcmDeferred {
-		// 		sender: ParaId::from(999),
-		// 		sent_at: 1u32.into(),
-		// 		deferred_to: 6u32.into(),
-		// 		message_hash: Some([
-		// 			228, 157, 66, 161, 219, 179, 248, 222, 134, 22, 43, 135, 170, 145, 86, 178,
-		// 			246, 58, 75, 16, 107, 167, 137, 119, 187, 28, 136, 35, 11, 58, 172, 232,
-		// 		]),
-		// 	}
-		// 		.into(),
-		// );
+#[test]
+fn handle_xcmp_messages_should_execute_deferred_message_from_different_blocks() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let assets = MultiAssets::new();
+		let versioned_xcm = VersionedXcm::from(Xcm::<RuntimeCall>(vec![
+			Instruction::<RuntimeCall>::ReserveAssetDeposited(assets),
+		]));
+
+		let para_id = ParaId::from(999);
+		let para_id_2 = ParaId::from(1000);
+
+		let xcm = versioned_xcm.encode();
+		let mut message_format = XcmpMessageFormat::ConcatenatedVersionedXcm.encode();
+		message_format.extend(xcm.clone());
+		let messages = vec![(para_id, 1u32.into(), message_format.as_slice())];
+		let messages2 = vec![(para_id_2, 2u32.into(), message_format.as_slice())];
+
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+		XcmpQueue::handle_xcmp_messages(messages2.clone().into_iter(), Weight::MAX);
+
+		assert_eq!(DeferredXcmMessages::<Test>::get(6), Some(create_bounded_vec(vec![(versioned_xcm.clone(),para_id)])));
+		assert_eq!(DeferredXcmMessages::<Test>::get(7), Some(create_bounded_vec(vec![(versioned_xcm.clone(),para_id_2)])));
+
+		//Act
+		XcmpQueue::service_deferred_queue(Weight::MAX,6, 0);
+
+		//Assert
+		assert_eq!(DeferredXcmMessages::<Test>::get(6), None);
+		assert_eq!(DeferredXcmMessages::<Test>::get(7), Some(create_bounded_vec(vec![(versioned_xcm.clone(),para_id_2)])));
 	});
 }
 
