@@ -67,7 +67,7 @@ pub use pallet::*;
 /// Index used to identify overweight XCMs.
 pub type OverweightIndex = u64;
 
-/// List of deffered messages to process
+
 
 #[derive(Encode, Decode, Debug, Eq, PartialEq, Clone, TypeInfo)]
 pub struct DeferredMessage<TRuntimeCall> {
@@ -76,6 +76,10 @@ pub struct DeferredMessage<TRuntimeCall> {
 	xcm: VersionedXcm<TRuntimeCall>,
 }
 
+// TODO Add callable function handlers for serving the queue or discarding messages in queue
+// TODO we need message ID to be able to work with messages by callable functions
+// TODO Limits on the number of messages in the queue, and the total size of the queue
+/// List of deffered messages to process
 pub type DeferredMessageList<TRuntimeCall> = BoundedVec<DeferredMessage<TRuntimeCall>, ConstU32<20>>;
 
 const LOG_TARGET: &str = "xcmp_queue";
@@ -1059,8 +1063,9 @@ impl<T: Config> Pallet<T> {
 					item.sent_at,
 					item.xcm.clone(),
 					max_weight,
-				); //TODO: error handling
-   //TODO: store the original block in DeferredXcmMessages because we need to pass it above instead of the block
+				); 
+				//TODO: error handling
+   				//TODO: store the original block in DeferredXcmMessages because we need to pass it above instead of the block
 
 				messages_processed += 1;
 				messages_processed < MAX_MESSAGES_PER_BLOCK
