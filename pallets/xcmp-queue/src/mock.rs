@@ -138,11 +138,15 @@ pub type LocalAssetTransactor = CurrencyAdapter<
 
 pub type LocationToAccountId = (ParentIsPreset<AccountId>,);
 
-
 pub struct BarrierMock {}
 
 impl ShouldExecute for BarrierMock {
-	fn should_execute<RuntimeCall>(origin: &MultiLocation, instructions: &mut [Instruction<RuntimeCall>], max_weight: Weight, weight_credit: &mut Weight) -> Result<(), ()> {
+	fn should_execute<RuntimeCall>(
+		origin: &MultiLocation,
+		instructions: &mut [Instruction<RuntimeCall>],
+		max_weight: Weight,
+		weight_credit: &mut Weight,
+	) -> Result<(), ()> {
 		Ok(())
 	}
 }

@@ -174,8 +174,8 @@ fn defer_xcm_execution_works() {
 		};
 
 		assert_eq!(
+			create_bounded_vec(vec![deferred_message]),
 			DeferredXcmMessages::<Test>::get(para_id),
-			create_bounded_vec(vec![deferred_message])
 		);
 
 		assert_last_event::<Test>(
@@ -260,7 +260,7 @@ fn handle_xcmp_messages_should_execute_deferred_message_and_remove_from_deferred
 			create_bounded_vec(vec![deferred_message.clone(), deferred_message])
 		);
 
-		XcmpQueue::service_deferred_queue(Weight::MAX, 7, 0);
+		XcmpQueue::service_deferred_queue(Weight::MAX, 7);
 
 		assert_eq!(DeferredXcmMessages::<Test>::get(para_id), create_bounded_vec(vec![]));
 	});
@@ -307,7 +307,7 @@ fn handle_xcmp_messages_should_execute_deferred_message_from_different_blocks() 
 		);
 
 		//Act
-		XcmpQueue::service_deferred_queue(Weight::MAX, 6, 0);
+		XcmpQueue::service_deferred_queue(Weight::MAX, 6);
 
 		//Assert
 		assert_eq!(DeferredXcmMessages::<Test>::get(para_id), create_bounded_vec(vec![]));
