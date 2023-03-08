@@ -172,7 +172,6 @@
 <a href="#172" id="172">172</a>
 <a href="#173" id="173">173</a>
 <a href="#174" id="174">174</a>
-<a href="#175" id="175">175</a>
 </pre><pre class="rust"><code><span class="comment">// Copyright 2019-2021 Parity Technologies (UK) Ltd.
 // This file is part of Cumulus.
 
@@ -315,7 +314,6 @@
 	<span class="kw">async fn </span>import_block(
 		<span class="kw-2">&amp;mut </span><span class="self">self</span>,
 		<span class="kw-2">mut </span>params: sc_consensus::BlockImportParams&lt;Block, <span class="self">Self</span>::Transaction&gt;,
-		cache: std::collections::HashMap&lt;sp_consensus::CacheKeyId, Vec&lt;u8&gt;&gt;,
 	) -&gt; <span class="prelude-ty">Result</span>&lt;sc_consensus::ImportResult, <span class="self">Self</span>::Error&gt; {
 		<span class="comment">// Blocks are stored within the backend by using POST hash.
 		</span><span class="kw">let </span>hash = params.post_hash();
@@ -333,7 +331,7 @@
 			monitor.release_mutex()
 		});
 
-		<span class="kw">let </span>res = <span class="self">self</span>.inner.import_block(params, cache).<span class="kw">await</span><span class="question-mark">?</span>;
+		<span class="kw">let </span>res = <span class="self">self</span>.inner.import_block(params).<span class="kw">await</span><span class="question-mark">?</span>;
 
 		<span class="kw">if let </span>(<span class="prelude-val">Some</span>(<span class="kw-2">mut </span>monitor_lock), ImportResult::Imported(<span class="kw">_</span>)) = (maybe_lock, <span class="kw-2">&amp;</span>res) {
 			<span class="kw">let </span><span class="kw-2">mut </span>monitor = monitor_lock.upgrade();

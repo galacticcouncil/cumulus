@@ -293,39 +293,39 @@
 	// Storage: ParachainSystem PendingUpwardMessages (r:1 w:1)
 	// Proof Skipped: ParachainSystem PendingUpwardMessages (max_values: Some(1), max_size: None, mode: Measured)
 	</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>report_holding() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">32_598_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">32_598_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 			.saturating_add(T::DbWeight::get().reads(<span class="number">6 </span><span class="kw">as </span>u64))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">2 </span><span class="kw">as </span>u64))
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>buy_execution() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">3_195_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">3_195_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="comment">// Storage: PolkadotXcm Queries (r:1 w:0)
 	// Proof Skipped: PolkadotXcm Queries (max_values: None, max_size: None, mode: Measured)
 	</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>query_response() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">10_939_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">10_939_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 			.saturating_add(T::DbWeight::get().reads(<span class="number">1 </span><span class="kw">as </span>u64))
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>transact() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">12_473_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">12_473_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>refund_surplus() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">3_458_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">3_458_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>set_error_handler() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">3_252_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">3_252_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>set_appendix() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">3_249_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">3_249_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>clear_error() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">3_190_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">3_190_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>descend_origin() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">4_268_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">4_268_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>clear_origin() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">3_255_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">3_255_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="comment">// Storage: ParachainInfo ParachainId (r:1 w:0)
 	// Proof: ParachainInfo ParachainId (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
@@ -340,19 +340,19 @@
 	// Storage: ParachainSystem PendingUpwardMessages (r:1 w:1)
 	// Proof Skipped: ParachainSystem PendingUpwardMessages (max_values: Some(1), max_size: None, mode: Measured)
 	</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>report_error() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">25_755_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">25_755_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 			.saturating_add(T::DbWeight::get().reads(<span class="number">6 </span><span class="kw">as </span>u64))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">2 </span><span class="kw">as </span>u64))
 	}
 	<span class="comment">// Storage: PolkadotXcm AssetTraps (r:1 w:1)
 	// Proof Skipped: PolkadotXcm AssetTraps (max_values: None, max_size: None, mode: Measured)
 	</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>claim_asset() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">15_124_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">15_124_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 			.saturating_add(T::DbWeight::get().reads(<span class="number">1 </span><span class="kw">as </span>u64))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">1 </span><span class="kw">as </span>u64))
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>trap() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">3_164_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">3_164_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="comment">// Storage: PolkadotXcm VersionNotifyTargets (r:1 w:1)
 	// Proof Skipped: PolkadotXcm VersionNotifyTargets (max_values: None, max_size: None, mode: Measured)
@@ -367,14 +367,14 @@
 	// Storage: ParachainSystem PendingUpwardMessages (r:1 w:1)
 	// Proof Skipped: ParachainSystem PendingUpwardMessages (max_values: Some(1), max_size: None, mode: Measured)
 	</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>subscribe_version() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">25_329_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">25_329_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 			.saturating_add(T::DbWeight::get().reads(<span class="number">6 </span><span class="kw">as </span>u64))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">3 </span><span class="kw">as </span>u64))
 	}
 	<span class="comment">// Storage: PolkadotXcm VersionNotifyTargets (r:0 w:1)
 	// Proof Skipped: PolkadotXcm VersionNotifyTargets (max_values: None, max_size: None, mode: Measured)
 	</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>unsubscribe_version() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">5_253_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">5_253_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 			.saturating_add(T::DbWeight::get().writes(<span class="number">1 </span><span class="kw">as </span>u64))
 	}
 	<span class="comment">// Storage: ParachainInfo ParachainId (r:1 w:0)
@@ -390,24 +390,24 @@
 	// Storage: ParachainSystem PendingUpwardMessages (r:1 w:1)
 	// Proof Skipped: ParachainSystem PendingUpwardMessages (max_values: Some(1), max_size: None, mode: Measured)
 	</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>initiate_reserve_withdraw() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">29_304_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">29_304_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 			.saturating_add(T::DbWeight::get().reads(<span class="number">6 </span><span class="kw">as </span>u64))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">2 </span><span class="kw">as </span>u64))
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>burn_asset() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">5_275_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">5_275_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>expect_asset() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">3_355_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">3_355_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>expect_origin() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">3_391_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">3_391_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>expect_error() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">3_192_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">3_192_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>expect_transact_status() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">3_342_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">3_342_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="comment">// Storage: ParachainInfo ParachainId (r:1 w:0)
 	// Proof: ParachainInfo ParachainId (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
@@ -422,12 +422,12 @@
 	// Storage: ParachainSystem PendingUpwardMessages (r:1 w:1)
 	// Proof Skipped: ParachainSystem PendingUpwardMessages (max_values: Some(1), max_size: None, mode: Measured)
 	</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>query_pallet() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">28_426_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">28_426_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 			.saturating_add(T::DbWeight::get().reads(<span class="number">6 </span><span class="kw">as </span>u64))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">2 </span><span class="kw">as </span>u64))
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>expect_pallet() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">4_826_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">4_826_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="comment">// Storage: ParachainInfo ParachainId (r:1 w:0)
 	// Proof: ParachainInfo ParachainId (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
@@ -442,24 +442,24 @@
 	// Storage: ParachainSystem PendingUpwardMessages (r:1 w:1)
 	// Proof Skipped: ParachainSystem PendingUpwardMessages (max_values: Some(1), max_size: None, mode: Measured)
 	</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>report_transact_status() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">26_238_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">26_238_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 			.saturating_add(T::DbWeight::get().reads(<span class="number">6 </span><span class="kw">as </span>u64))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">2 </span><span class="kw">as </span>u64))
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>clear_transact_status() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">3_240_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">3_240_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>set_topic() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">3_181_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">3_181_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>clear_topic() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">3_142_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">3_142_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>set_fees_mode() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">3_216_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">3_216_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>unpaid_execution() -&gt; Weight {
-		Weight::from_ref_time(<span class="number">3_394_000 </span><span class="kw">as </span>u64)
+		Weight::from_parts(<span class="number">3_394_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 }
 </code></pre></div>

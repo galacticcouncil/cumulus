@@ -182,10 +182,10 @@
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 1_628 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">1_691_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">0</span>))
+		</span>Weight::from_parts(<span class="number">1_691_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">0</span>))
 			<span class="comment">// Standard Error: 0
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">369</span>).saturating_mul(b.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">369</span>, <span class="number">0</span>).saturating_mul(b.into()))
 	}
 	<span class="doccomment">/// The range of component `b` is `[0, 3932160]`.
 	</span><span class="kw">fn </span>remark_with_event(b: u32, ) -&gt; Weight {
@@ -193,10 +193,10 @@
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 6_332 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">6_564_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">0</span>))
+		</span>Weight::from_parts(<span class="number">6_564_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">0</span>))
 			<span class="comment">// Standard Error: 0
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">1_714</span>).saturating_mul(b.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">1_714</span>, <span class="number">0</span>).saturating_mul(b.into()))
 	}
 	<span class="doccomment">/// Storage: System Digest (r:1 w:1)
 	/// Proof Skipped: System Digest (max_values: Some(1), max_size: None, mode: Measured)
@@ -207,8 +207,8 @@
 		//  Measured:  `0`
 		//  Estimated: `495`
 		// Minimum execution time: 3_441 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">3_684_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">495</span>))
+		</span>Weight::from_parts(<span class="number">3_684_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">495</span>))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">1</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">2</span>))
 	}
@@ -220,10 +220,10 @@
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 1_698 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">1_802_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">0</span>))
+		</span>Weight::from_parts(<span class="number">1_802_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">0</span>))
 			<span class="comment">// Standard Error: 1_738
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">576_825</span>).saturating_mul(i.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">576_825</span>, <span class="number">0</span>).saturating_mul(i.into()))
 			.saturating_add(T::DbWeight::get().writes((<span class="number">1_u64</span>).saturating_mul(i.into())))
 	}
 	<span class="doccomment">/// Storage: Skipped Metadata (r:0 w:0)
@@ -234,10 +234,10 @@
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 1_782 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">1_826_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">0</span>))
+		</span>Weight::from_parts(<span class="number">1_826_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">0</span>))
 			<span class="comment">// Standard Error: 808
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">446_795</span>).saturating_mul(i.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">446_795</span>, <span class="number">0</span>).saturating_mul(i.into()))
 			.saturating_add(T::DbWeight::get().writes((<span class="number">1_u64</span>).saturating_mul(i.into())))
 	}
 	<span class="doccomment">/// Storage: Skipped Metadata (r:0 w:0)
@@ -248,12 +248,12 @@
 		//  Measured:  `68 + p * (69 ±0)`
 		//  Estimated: `66 + p * (70 ±0)`
 		// Minimum execution time: 3_444 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">3_538_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">66</span>))
+		</span>Weight::from_parts(<span class="number">3_538_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">66</span>))
 			<span class="comment">// Standard Error: 920
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">950_898</span>).saturating_mul(p.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">950_898</span>, <span class="number">0</span>).saturating_mul(p.into()))
 			.saturating_add(T::DbWeight::get().writes((<span class="number">1_u64</span>).saturating_mul(p.into())))
-			.saturating_add(Weight::from_proof_size(<span class="number">70</span>).saturating_mul(p.into()))
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">70</span>).saturating_mul(p.into()))
 	}
 }
 </code></pre></div>

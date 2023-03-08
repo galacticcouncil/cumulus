@@ -371,24 +371,6 @@
 <a href="#371" id="371">371</a>
 <a href="#372" id="372">372</a>
 <a href="#373" id="373">373</a>
-<a href="#374" id="374">374</a>
-<a href="#375" id="375">375</a>
-<a href="#376" id="376">376</a>
-<a href="#377" id="377">377</a>
-<a href="#378" id="378">378</a>
-<a href="#379" id="379">379</a>
-<a href="#380" id="380">380</a>
-<a href="#381" id="381">381</a>
-<a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a>
-<a href="#385" id="385">385</a>
-<a href="#386" id="386">386</a>
-<a href="#387" id="387">387</a>
-<a href="#388" id="388">388</a>
-<a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a>
-<a href="#391" id="391">391</a>
 </pre><pre class="rust"><code><span class="comment">// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -405,9 +387,9 @@
 // limitations under the License.
 
 </span><span class="kw">use super</span>::{
-	AccountId, AllPalletsWithSystem, AssetIdForTrustBackedAssets, Assets, Authorship, Balance,
-	Balances, ParachainInfo, ParachainSystem, PolkadotXcm, Runtime, RuntimeCall, RuntimeEvent,
-	RuntimeOrigin, TrustBackedAssetsInstance, WeightToFee, XcmpQueue,
+	AccountId, AllPalletsWithSystem, Assets, Authorship, Balance, Balances, ParachainInfo,
+	ParachainSystem, PolkadotXcm, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin,
+	TrustBackedAssetsInstance, WeightToFee, XcmpQueue,
 };
 <span class="kw">use </span>frame_support::{
 	match_types, parameter_types,
@@ -425,17 +407,13 @@
 <span class="kw">use </span>xcm::latest::prelude::<span class="kw-2">*</span>;
 <span class="kw">use </span>xcm_builder::{
 	AccountId32Aliases, AllowExplicitUnpaidExecutionFrom, AllowKnownQueryResponses,
-	AllowSubscriptionsFrom, AllowTopLevelPaidExecutionFrom, AsPrefixedGeneralIndex,
-	ConvertedConcreteId, CurrencyAdapter, EnsureXcmOrigin, FungiblesAdapter, IsConcrete, LocalMint,
-	NativeAsset, ParentAsSuperuser, ParentIsPreset, RelayChainAsNative, SiblingParachainAsNative,
-	SiblingParachainConvertsVia, SignedAccountId32AsNative, SignedToAccountId32,
-	SovereignSignedViaLocation, TakeWeightCredit, UsingComponents, WeightInfoBounds,
-	WithComputedOrigin,
+	AllowSubscriptionsFrom, AllowTopLevelPaidExecutionFrom, CurrencyAdapter, EnsureXcmOrigin,
+	FungiblesAdapter, IsConcrete, LocalMint, NativeAsset, ParentAsSuperuser, ParentIsPreset,
+	RelayChainAsNative, SiblingParachainAsNative, SiblingParachainConvertsVia,
+	SignedAccountId32AsNative, SignedToAccountId32, SovereignSignedViaLocation, TakeWeightCredit,
+	UsingComponents, WeightInfoBounds, WithComputedOrigin,
 };
-<span class="kw">use </span>xcm_executor::{
-	traits::{JustTry, WithOriginFilter},
-	XcmExecutor,
-};
+<span class="kw">use </span>xcm_executor::{traits::WithOriginFilter, XcmExecutor};
 
 <span class="macro">parameter_types! </span>{
 	<span class="kw">pub const </span>DotLocation: MultiLocation = MultiLocation::parent();
@@ -475,21 +453,16 @@
 	</span>(),
 &gt;;
 
+<span class="doccomment">/// `AssetId/Balancer` converter for `TrustBackedAssets``
+</span><span class="kw">pub type </span>TrustBackedAssetsConvertedConcreteId =
+	assets_common::TrustBackedAssetsConvertedConcreteId&lt;TrustBackedAssetsPalletLocation, Balance&gt;;
+
 <span class="doccomment">/// Means for transacting assets besides the native currency on this chain.
 </span><span class="kw">pub type </span>FungiblesTransactor = FungiblesAdapter&lt;
 	<span class="comment">// Use this fungibles implementation:
 	</span>Assets,
 	<span class="comment">// Use this currency when it is a fungible asset matching the given location or name:
-	</span>ConvertedConcreteId&lt;
-		AssetIdForTrustBackedAssets,
-		Balance,
-		AsPrefixedGeneralIndex&lt;
-			TrustBackedAssetsPalletLocation,
-			AssetIdForTrustBackedAssets,
-			JustTry,
-		&gt;,
-		JustTry,
-	&gt;,
+	</span>TrustBackedAssetsConvertedConcreteId,
 	<span class="comment">// Convert an XCM MultiLocation into a local account id:
 	</span>LocationToAccountId,
 	<span class="comment">// Our chain&#39;s account ID type (we can&#39;t get away without mentioning it explicitly):
@@ -693,16 +666,7 @@
 		cumulus_primitives_utility::TakeFirstAssetTrader&lt;
 			AccountId,
 			AssetFeeAsExistentialDepositMultiplierFeeCharger,
-			ConvertedConcreteId&lt;
-				AssetIdForTrustBackedAssets,
-				Balance,
-				AsPrefixedGeneralIndex&lt;
-					TrustBackedAssetsPalletLocation,
-					AssetIdForTrustBackedAssets,
-					JustTry,
-				&gt;,
-				JustTry,
-			&gt;,
+			TrustBackedAssetsConvertedConcreteId,
 			Assets,
 			cumulus_primitives_utility::XcmFeesTo32ByteAccount&lt;
 				FungiblesTransactor,

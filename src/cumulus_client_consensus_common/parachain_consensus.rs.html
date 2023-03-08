@@ -963,7 +963,7 @@
 	block_import_params.fork_choice = <span class="prelude-val">Some</span>(ForkChoiceStrategy::Custom(<span class="bool-val">true</span>));
 	block_import_params.import_existing = <span class="bool-val">true</span>;
 
-	<span class="kw">if let </span><span class="prelude-val">Err</span>(err) = (<span class="kw-2">&amp;*</span>parachain).import_block(block_import_params, Default::default()).<span class="kw">await </span>{
+	<span class="kw">if let </span><span class="prelude-val">Err</span>(err) = (<span class="kw-2">&amp;*</span>parachain).import_block(block_import_params).<span class="kw">await </span>{
 		<span class="macro">tracing::warn!</span>(
 			target: LOG_TARGET,
 			block_hash = <span class="question-mark">?</span>hash,

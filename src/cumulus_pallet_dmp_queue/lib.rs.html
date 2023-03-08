@@ -1046,7 +1046,7 @@
 	</span><span class="kw">impl</span>&lt;T: Config&gt; Pallet&lt;T&gt; {
 		<span class="doccomment">/// Service a single overweight message.
 		</span><span class="attr">#[pallet::call_index(<span class="number">0</span>)]
-		#[pallet::weight(weight_limit.saturating_add(Weight::from_ref_time(<span class="number">1_000_000</span>)))]
+		#[pallet::weight(weight_limit.saturating_add(Weight::from_parts(<span class="number">1_000_000</span>, <span class="number">0</span>)))]
 		</span><span class="kw">pub fn </span>service_overweight(
 			origin: OriginFor&lt;T&gt;,
 			index: OverweightIndex,
@@ -1059,7 +1059,7 @@
 				.map_err(|<span class="kw">_</span>| Error::&lt;T&gt;::OverLimit)<span class="question-mark">?</span>;
 			Overweight::&lt;T&gt;::remove(index);
 			<span class="self">Self</span>::deposit_event(Event::OverweightServiced { overweight_index: index, weight_used });
-			<span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(weight_used.saturating_add(Weight::from_ref_time(<span class="number">1_000_000</span>))).into())
+			<span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(weight_used.saturating_add(Weight::from_parts(<span class="number">1_000_000</span>, <span class="number">0</span>))).into())
 		}
 	}
 

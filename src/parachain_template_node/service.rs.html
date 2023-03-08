@@ -422,8 +422,6 @@
 <a href="#422" id="422">422</a>
 <a href="#423" id="423">423</a>
 <a href="#424" id="424">424</a>
-<a href="#425" id="425">425</a>
-<a href="#426" id="426">426</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
 </span><span class="comment">// std
@@ -431,7 +429,7 @@
 
 <span class="kw">use </span>cumulus_client_cli::CollatorOptions;
 <span class="comment">// Local Runtime Types
-</span><span class="kw">use </span>parachain_template_runtime::{opaque::Block, Hash, RuntimeApi};
+</span><span class="kw">use </span>parachain_template_runtime::{opaque::Block, RuntimeApi};
 
 <span class="comment">// Cumulus Imports
 </span><span class="kw">use </span>cumulus_client_consensus_aura::{AuraConsensus, BuildAuraConsensusParams, SlotProportion};
@@ -443,14 +441,14 @@
 	start_full_node, BuildNetworkParams, StartCollatorParams, StartFullNodeParams,
 };
 <span class="kw">use </span>cumulus_primitives_core::ParaId;
-<span class="kw">use </span>cumulus_relay_chain_interface::{RelayChainError, RelayChainInterface};
+<span class="kw">use </span>cumulus_relay_chain_interface::RelayChainInterface;
 
 <span class="comment">// Substrate Imports
 </span><span class="kw">use </span>frame_benchmarking_cli::SUBSTRATE_REFERENCE_HARDWARE;
 <span class="kw">use </span>sc_consensus::ImportQueue;
 <span class="kw">use </span>sc_executor::NativeElseWasmExecutor;
-<span class="kw">use </span>sc_network::NetworkService;
 <span class="kw">use </span>sc_network_common::service::NetworkBlock;
+<span class="kw">use </span>sc_network_sync::SyncingService;
 <span class="kw">use </span>sc_service::{Configuration, PartialComponents, TFullBackend, TFullClient, TaskManager};
 <span class="kw">use </span>sc_telemetry::{Telemetry, TelemetryHandle, TelemetryWorker, TelemetryWorkerHandle};
 <span class="kw">use </span>sp_keystore::SyncCryptoStorePtr;
@@ -588,10 +586,7 @@
 		hwbench.clone(),
 	)
 	.<span class="kw">await
-	</span>.map_err(|e| <span class="kw">match </span>e {
-		RelayChainError::ServiceError(polkadot_service::Error::Sub(x)) =&gt; x,
-		s =&gt; s.to_string().into(),
-	})<span class="question-mark">?</span>;
+	</span>.map_err(|e| sc_service::Error::Application(Box::new(e) <span class="kw">as </span>Box&lt;<span class="kw">_</span>&gt;))<span class="question-mark">?</span>;
 
 	<span class="kw">let </span>force_authoring = parachain_config.force_authoring;
 	<span class="kw">let </span>validator = parachain_config.role.is_authority();
@@ -599,7 +594,7 @@
 	<span class="kw">let </span>transaction_pool = params.transaction_pool.clone();
 	<span class="kw">let </span>import_queue_service = params.import_queue.service();
 
-	<span class="kw">let </span>(network, system_rpc_tx, tx_handler_controller, start_network) =
+	<span class="kw">let </span>(network, system_rpc_tx, tx_handler_controller, start_network, sync_service) =
 		build_network(BuildNetworkParams {
 			parachain_config: <span class="kw-2">&amp;</span>parachain_config,
 			client: client.clone(),
@@ -644,6 +639,7 @@
 		keystore: params.keystore_container.sync_keystore(),
 		backend,
 		network: network.clone(),
+		sync_service: sync_service.clone(),
 		system_rpc_tx,
 		tx_handler_controller,
 		telemetry: telemetry.as_mut(),
@@ -671,8 +667,8 @@
 	}
 
 	<span class="kw">let </span>announce_block = {
-		<span class="kw">let </span>network = network.clone();
-		Arc::new(<span class="kw">move </span>|hash, data| network.announce_block(hash, data))
+		<span class="kw">let </span>sync_service = sync_service.clone();
+		Arc::new(<span class="kw">move </span>|hash, data| sync_service.announce_block(hash, data))
 	};
 
 	<span class="kw">let </span>relay_chain_slot_duration = Duration::from_secs(<span class="number">6</span>);
@@ -690,7 +686,7 @@
 			<span class="kw-2">&amp;</span>task_manager,
 			relay_chain_interface.clone(),
 			transaction_pool,
-			network,
+			sync_service,
 			params.keystore_container.sync_keystore(),
 			force_authoring,
 			para_id,
@@ -779,7 +775,7 @@
 	task_manager: <span class="kw-2">&amp;</span>TaskManager,
 	relay_chain_interface: Arc&lt;<span class="kw">dyn </span>RelayChainInterface&gt;,
 	transaction_pool: Arc&lt;sc_transaction_pool::FullPool&lt;Block, ParachainClient&gt;&gt;,
-	sync_oracle: Arc&lt;NetworkService&lt;Block, Hash&gt;&gt;,
+	sync_oracle: Arc&lt;SyncingService&lt;Block&gt;&gt;,
 	keystore: SyncCryptoStorePtr,
 	force_authoring: bool,
 	para_id: ParaId,

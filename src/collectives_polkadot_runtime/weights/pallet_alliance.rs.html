@@ -557,18 +557,18 @@
 		//  Measured:  `502 + m * (32 ±0) + p * (36 ±0)`
 		//  Estimated: `10983 + m * (128 ±0) + p * (144 ±0)`
 		// Minimum execution time: 26_997 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">28_875_691</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">10983</span>))
+		</span>Weight::from_parts(<span class="number">28_875_691</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">10983</span>))
 			<span class="comment">// Standard Error: 65
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">235</span>).saturating_mul(b.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">235</span>, <span class="number">0</span>).saturating_mul(b.into()))
 			<span class="comment">// Standard Error: 683
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">17_740</span>).saturating_mul(m.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">17_740</span>, <span class="number">0</span>).saturating_mul(m.into()))
 			<span class="comment">// Standard Error: 675
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">88_731</span>).saturating_mul(p.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">88_731</span>, <span class="number">0</span>).saturating_mul(p.into()))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">4</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">4</span>))
-			.saturating_add(Weight::from_proof_size(<span class="number">128</span>).saturating_mul(m.into()))
-			.saturating_add(Weight::from_proof_size(<span class="number">144</span>).saturating_mul(p.into()))
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">128</span>).saturating_mul(m.into()))
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">144</span>).saturating_mul(p.into()))
 	}
 	<span class="doccomment">/// Storage: Alliance Members (r:1 w:0)
 	/// Proof: Alliance Members (max_values: None, max_size: Some(3211), added: 5686, mode: MaxEncodedLen)
@@ -580,13 +580,13 @@
 		//  Measured:  `932 + m * (64 ±0)`
 		//  Estimated: `9092 + m * (64 ±0)`
 		// Minimum execution time: 23_241 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">23_786_275</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">9092</span>))
+		</span>Weight::from_parts(<span class="number">23_786_275</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">9092</span>))
 			<span class="comment">// Standard Error: 563
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">44_164</span>).saturating_mul(m.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">44_164</span>, <span class="number">0</span>).saturating_mul(m.into()))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">2</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">1</span>))
-			.saturating_add(Weight::from_proof_size(<span class="number">64</span>).saturating_mul(m.into()))
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">64</span>).saturating_mul(m.into()))
 	}
 	<span class="doccomment">/// Storage: Alliance Members (r:1 w:0)
 	/// Proof: Alliance Members (max_values: None, max_size: Some(3211), added: 5686, mode: MaxEncodedLen)
@@ -605,16 +605,16 @@
 		//  Measured:  `438 + m * (96 ±0) + p * (36 ±0)`
 		//  Estimated: `11067 + m * (388 ±0) + p * (144 ±0)`
 		// Minimum execution time: 32_551 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">30_322_236</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">11067</span>))
+		</span>Weight::from_parts(<span class="number">30_322_236</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">11067</span>))
 			<span class="comment">// Standard Error: 695
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">44_336</span>).saturating_mul(m.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">44_336</span>, <span class="number">0</span>).saturating_mul(m.into()))
 			<span class="comment">// Standard Error: 678
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">83_273</span>).saturating_mul(p.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">83_273</span>, <span class="number">0</span>).saturating_mul(p.into()))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">4</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">3</span>))
-			.saturating_add(Weight::from_proof_size(<span class="number">388</span>).saturating_mul(m.into()))
-			.saturating_add(Weight::from_proof_size(<span class="number">144</span>).saturating_mul(p.into()))
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">388</span>).saturating_mul(m.into()))
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">144</span>).saturating_mul(p.into()))
 	}
 	<span class="doccomment">/// Storage: Alliance Members (r:1 w:0)
 	/// Proof: Alliance Members (max_values: None, max_size: Some(3211), added: 5686, mode: MaxEncodedLen)
@@ -634,16 +634,16 @@
 		//  Measured:  `923 + m * (96 ±0) + p * (41 ±0)`
 		//  Estimated: `15422 + m * (388 ±0) + p * (160 ±0)`
 		// Minimum execution time: 42_592 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">42_349_696</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">15422</span>))
+		</span>Weight::from_parts(<span class="number">42_349_696</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">15422</span>))
 			<span class="comment">// Standard Error: 1_776
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">53_830</span>).saturating_mul(m.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">53_830</span>, <span class="number">0</span>).saturating_mul(m.into()))
 			<span class="comment">// Standard Error: 1_731
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">94_827</span>).saturating_mul(p.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">94_827</span>, <span class="number">0</span>).saturating_mul(p.into()))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">5</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">3</span>))
-			.saturating_add(Weight::from_proof_size(<span class="number">388</span>).saturating_mul(m.into()))
-			.saturating_add(Weight::from_proof_size(<span class="number">160</span>).saturating_mul(p.into()))
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">388</span>).saturating_mul(m.into()))
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">160</span>).saturating_mul(p.into()))
 	}
 	<span class="doccomment">/// Storage: Alliance Members (r:1 w:0)
 	/// Proof: Alliance Members (max_values: None, max_size: Some(3211), added: 5686, mode: MaxEncodedLen)
@@ -666,16 +666,16 @@
 		//  Measured:  `677 + m * (96 ±0) + p * (41 ±0)`
 		//  Estimated: `14232 + m * (507 ±0) + p * (202 ±0)`
 		// Minimum execution time: 39_735 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">42_276_266</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">14232</span>))
+		</span>Weight::from_parts(<span class="number">42_276_266</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">14232</span>))
 			<span class="comment">// Standard Error: 3_451
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">94_755</span>).saturating_mul(m.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">94_755</span>, <span class="number">0</span>).saturating_mul(m.into()))
 			<span class="comment">// Standard Error: 3_409
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">108_485</span>).saturating_mul(p.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">108_485</span>, <span class="number">0</span>).saturating_mul(p.into()))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">6</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">4</span>))
-			.saturating_add(Weight::from_proof_size(<span class="number">507</span>).saturating_mul(m.into()))
-			.saturating_add(Weight::from_proof_size(<span class="number">202</span>).saturating_mul(p.into()))
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">507</span>).saturating_mul(m.into()))
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">202</span>).saturating_mul(p.into()))
 	}
 	<span class="doccomment">/// Storage: Alliance Members (r:1 w:0)
 	/// Proof: Alliance Members (max_values: None, max_size: Some(3211), added: 5686, mode: MaxEncodedLen)
@@ -697,16 +697,16 @@
 		//  Measured:  `545 + m * (96 ±0) + p * (36 ±0)`
 		//  Estimated: `12436 + m * (480 ±0) + p * (180 ±0)`
 		// Minimum execution time: 33_604 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">32_382_610</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">12436</span>))
+		</span>Weight::from_parts(<span class="number">32_382_610</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">12436</span>))
 			<span class="comment">// Standard Error: 564
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">41_625</span>).saturating_mul(m.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">41_625</span>, <span class="number">0</span>).saturating_mul(m.into()))
 			<span class="comment">// Standard Error: 544
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">80_954</span>).saturating_mul(p.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">80_954</span>, <span class="number">0</span>).saturating_mul(p.into()))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">5</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">3</span>))
-			.saturating_add(Weight::from_proof_size(<span class="number">480</span>).saturating_mul(m.into()))
-			.saturating_add(Weight::from_proof_size(<span class="number">180</span>).saturating_mul(p.into()))
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">480</span>).saturating_mul(m.into()))
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">180</span>).saturating_mul(p.into()))
 	}
 	<span class="doccomment">/// Storage: Alliance Members (r:2 w:2)
 	/// Proof: Alliance Members (max_values: None, max_size: Some(3211), added: 5686, mode: MaxEncodedLen)
@@ -719,12 +719,12 @@
 		//  Measured:  `12`
 		//  Estimated: `11879`
 		// Minimum execution time: 27_970 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">16_763_631</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">11879</span>))
+		</span>Weight::from_parts(<span class="number">16_763_631</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">11879</span>))
 			<span class="comment">// Standard Error: 496
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">130_747</span>).saturating_mul(m.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">130_747</span>, <span class="number">0</span>).saturating_mul(m.into()))
 			<span class="comment">// Standard Error: 490
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">112_074</span>).saturating_mul(z.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">112_074</span>, <span class="number">0</span>).saturating_mul(z.into()))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">3</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">3</span>))
 	}
@@ -748,23 +748,23 @@
 		//  Measured:  `0 + x * (52 ±0) + y * (53 ±0) + z * (282 ±0)`
 		//  Estimated: `31580 + x * (2590 ±0) + y * (2590 ±0) + z * (3200 ±1)`
 		// Minimum execution time: 221_464 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">223_114_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">31580</span>))
+		</span>Weight::from_parts(<span class="number">223_114_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">31580</span>))
 			<span class="comment">// Standard Error: 19_600
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">471_527</span>).saturating_mul(x.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">471_527</span>, <span class="number">0</span>).saturating_mul(x.into()))
 			<span class="comment">// Standard Error: 19_506
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">424_033</span>).saturating_mul(y.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">424_033</span>, <span class="number">0</span>).saturating_mul(y.into()))
 			<span class="comment">// Standard Error: 38_976
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">9_666_599</span>).saturating_mul(z.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">9_666_599</span>, <span class="number">0</span>).saturating_mul(z.into()))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">3</span>))
 			.saturating_add(T::DbWeight::get().reads((<span class="number">1_u64</span>).saturating_mul(x.into())))
 			.saturating_add(T::DbWeight::get().reads((<span class="number">1_u64</span>).saturating_mul(y.into())))
 			.saturating_add(T::DbWeight::get().reads((<span class="number">1_u64</span>).saturating_mul(z.into())))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">4</span>))
 			.saturating_add(T::DbWeight::get().writes((<span class="number">2_u64</span>).saturating_mul(z.into())))
-			.saturating_add(Weight::from_proof_size(<span class="number">2590</span>).saturating_mul(x.into()))
-			.saturating_add(Weight::from_proof_size(<span class="number">2590</span>).saturating_mul(y.into()))
-			.saturating_add(Weight::from_proof_size(<span class="number">3200</span>).saturating_mul(z.into()))
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">2590</span>).saturating_mul(x.into()))
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">2590</span>).saturating_mul(y.into()))
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">3200</span>).saturating_mul(z.into()))
 	}
 	<span class="doccomment">/// Storage: Alliance Rule (r:0 w:1)
 	/// Proof: Alliance Rule (max_values: Some(1), max_size: Some(87), added: 582, mode: MaxEncodedLen)
@@ -773,8 +773,8 @@
 		//  Measured:  `0`
 		//  Estimated: `0`
 		// Minimum execution time: 8_585 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">8_746_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">0</span>))
+		</span>Weight::from_parts(<span class="number">8_746_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">0</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">1</span>))
 	}
 	<span class="doccomment">/// Storage: Alliance Announcements (r:1 w:1)
@@ -784,8 +784,8 @@
 		//  Measured:  `76`
 		//  Estimated: `9197`
 		// Minimum execution time: 10_728 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">10_974_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">9197</span>))
+		</span>Weight::from_parts(<span class="number">10_974_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">9197</span>))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">1</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">1</span>))
 	}
@@ -796,8 +796,8 @@
 		//  Measured:  `181`
 		//  Estimated: `9197`
 		// Minimum execution time: 11_751 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">12_205_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">9197</span>))
+		</span>Weight::from_parts(<span class="number">12_205_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">9197</span>))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">1</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">1</span>))
 	}
@@ -814,8 +814,8 @@
 		//  Measured:  `388`
 		//  Estimated: `23358`
 		// Minimum execution time: 38_798 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">39_255_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">23358</span>))
+		</span>Weight::from_parts(<span class="number">39_255_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">23358</span>))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">5</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">3</span>))
 	}
@@ -828,8 +828,8 @@
 		//  Measured:  `255`
 		//  Estimated: `20755`
 		// Minimum execution time: 27_702 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">28_189_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">20755</span>))
+		</span>Weight::from_parts(<span class="number">28_189_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">20755</span>))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">4</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">1</span>))
 	}
@@ -846,8 +846,8 @@
 		//  Measured:  `298`
 		//  Estimated: `12761`
 		// Minimum execution time: 23_033 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">23_589_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">12761</span>))
+		</span>Weight::from_parts(<span class="number">23_589_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">12761</span>))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">3</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">4</span>))
 	}
@@ -866,8 +866,8 @@
 		//  Measured:  `298`
 		//  Estimated: `24133`
 		// Minimum execution time: 31_352 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">31_848_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">24133</span>))
+		</span>Weight::from_parts(<span class="number">31_848_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">24133</span>))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">5</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">5</span>))
 	}
@@ -884,8 +884,8 @@
 		//  Measured:  `580`
 		//  Estimated: `13355`
 		// Minimum execution time: 31_872 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">32_156_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">13355</span>))
+		</span>Weight::from_parts(<span class="number">32_156_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">13355</span>))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">4</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">4</span>))
 	}
@@ -918,8 +918,8 @@
 		//  Measured:  `716`
 		//  Estimated: `35980`
 		// Minimum execution time: 115_869 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">116_954_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">35980</span>))
+		</span>Weight::from_parts(<span class="number">116_954_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">35980</span>))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">13</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">8</span>))
 	}
@@ -934,12 +934,12 @@
 		//  Measured:  `76`
 		//  Estimated: `29894`
 		// Minimum execution time: 6_956 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">7_074_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">29894</span>))
+		</span>Weight::from_parts(<span class="number">7_074_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">29894</span>))
 			<span class="comment">// Standard Error: 2_782
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">1_178_647</span>).saturating_mul(n.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">1_178_647</span>, <span class="number">0</span>).saturating_mul(n.into()))
 			<span class="comment">// Standard Error: 1_089
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">65_684</span>).saturating_mul(l.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">65_684</span>, <span class="number">0</span>).saturating_mul(l.into()))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">2</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">2</span>))
 	}
@@ -954,12 +954,12 @@
 		//  Measured:  `0 + n * (289 ±0) + l * (100 ±0)`
 		//  Estimated: `29894`
 		// Minimum execution time: 6_939 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">7_100_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">29894</span>))
+		</span>Weight::from_parts(<span class="number">7_100_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">29894</span>))
 			<span class="comment">// Standard Error: 170_977
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">13_668_797</span>).saturating_mul(n.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">13_668_797</span>, <span class="number">0</span>).saturating_mul(n.into()))
 			<span class="comment">// Standard Error: 66_962
-			</span>.saturating_add(Weight::from_ref_time(<span class="number">451_782</span>).saturating_mul(l.into()))
+			</span>.saturating_add(Weight::from_parts(<span class="number">451_782</span>, <span class="number">0</span>).saturating_mul(l.into()))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">2</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">2</span>))
 	}
@@ -976,8 +976,8 @@
 		//  Measured:  `298`
 		//  Estimated: `18447`
 		// Minimum execution time: 29_564 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">30_313_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">18447</span>))
+		</span>Weight::from_parts(<span class="number">30_313_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">18447</span>))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">4</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">4</span>))
 	}

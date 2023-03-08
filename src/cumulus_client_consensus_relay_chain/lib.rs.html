@@ -254,12 +254,6 @@
 <a href="#254" id="254">254</a>
 <a href="#255" id="255">255</a>
 <a href="#256" id="256">256</a>
-<a href="#257" id="257">257</a>
-<a href="#258" id="258">258</a>
-<a href="#259" id="259">259</a>
-<a href="#260" id="260">260</a>
-<a href="#261" id="261">261</a>
-<a href="#262" id="262">262</a>
 </pre><pre class="rust"><code><span class="comment">// Copyright 2021 Parity Technologies (UK) Ltd.
 // This file is part of Cumulus.
 
@@ -459,13 +453,7 @@
 			sc_consensus::StorageChanges::Changes(storage_changes),
 		);
 
-		<span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">self
-			</span>.block_import
-			.lock()
-			.<span class="kw">await
-			</span>.import_block(block_import_params, Default::default())
-			.<span class="kw">await
-		</span>{
+		<span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">self</span>.block_import.lock().<span class="kw">await</span>.import_block(block_import_params).<span class="kw">await </span>{
 			<span class="macro">tracing::error!</span>(
 				target: LOG_TARGET,
 				at = <span class="question-mark">?</span>parent.hash(),

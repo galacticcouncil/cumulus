@@ -838,7 +838,7 @@
 <span class="kw">impl </span>OnRuntimeUpgrade <span class="kw">for </span>TestOnRuntimeUpgrade {
 	<span class="kw">fn </span>on_runtime_upgrade() -&gt; frame_support::weights::Weight {
 		<span class="macro">assert_eq!</span>(sp_io::storage::get(TEST_RUNTIME_UPGRADE_KEY), <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>].into()));
-		Weight::from_ref_time(<span class="number">1</span>)
+		Weight::from_parts(<span class="number">1</span>, <span class="number">0</span>)
 	}
 }
 

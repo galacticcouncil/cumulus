@@ -209,6 +209,9 @@
 <a href="#209" id="209">209</a>
 <a href="#210" id="210">210</a>
 <a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
 </pre><pre class="rust"><code><span class="comment">// Copyright 2017-2022 Parity Technologies (UK) Ltd.
 // This file is part of Polkadot.
 
@@ -363,13 +366,14 @@
 	<span class="kw">let </span>(collation_req_receiver, available_data_req_receiver) =
 		build_request_response_protocol_receivers(<span class="kw-2">&amp;</span>request_protocol_names, <span class="kw-2">&amp;mut </span>config);
 
-	<span class="kw">let </span>(network, network_starter) =
+	<span class="kw">let </span>(network, network_starter, sync_oracle) =
 		network::build_collator_network(network::BuildCollatorNetworkParams {
 			config: <span class="kw-2">&amp;</span>config,
 			client: relay_chain_rpc_client.clone(),
 			spawn_handle: task_manager.spawn_handle(),
 			genesis_hash,
-		})<span class="question-mark">?</span>;
+		})
+		.map_err(|e| RelayChainError::Application(Box::new(e) <span class="kw">as </span>Box&lt;<span class="kw">_</span>&gt;))<span class="question-mark">?</span>;
 
 	<span class="kw">let </span>authority_discovery_service = build_authority_discovery_service(
 		<span class="kw-2">&amp;</span>task_manager,
@@ -382,6 +386,7 @@
 	<span class="kw">let </span>overseer_args = CollatorOverseerGenArgs {
 		runtime_client: relay_chain_rpc_client.clone(),
 		network_service: network.clone(),
+		sync_oracle,
 		authority_discovery_service,
 		collation_req_receiver,
 		available_data_req_receiver,
@@ -396,7 +401,8 @@
 		overseer_args,
 		<span class="kw-2">&amp;</span>task_manager,
 		relay_chain_rpc_client.clone(),
-	)<span class="question-mark">?</span>;
+	)
+	.map_err(|e| RelayChainError::Application(Box::new(e) <span class="kw">as </span>Box&lt;<span class="kw">_</span>&gt;))<span class="question-mark">?</span>;
 
 	network_starter.start_network();
 

@@ -316,7 +316,7 @@
 	<span class="comment">// Currently there is no trusted reserve
 	</span><span class="kw">fn </span>reserve_asset_deposited(_assets: <span class="kw-2">&amp;</span>MultiAssets) -&gt; Weight {
 		<span class="comment">// TODO: hardcoded - fix https://github.com/paritytech/cumulus/issues/1974
-		</span>Weight::from_ref_time(<span class="number">1_000_000_000 </span><span class="kw">as </span>u64)
+		</span>Weight::from_parts(<span class="number">1_000_000_000 </span><span class="kw">as </span>u64, <span class="number">0</span>)
 	}
 	<span class="kw">fn </span>receive_teleported_asset(assets: <span class="kw-2">&amp;</span>MultiAssets) -&gt; Weight {
 		assets.weigh_multi_assets(XcmFungibleWeight::&lt;Runtime&gt;::receive_teleported_asset())
@@ -374,7 +374,7 @@
 
 	<span class="kw">fn </span>deposit_asset(assets: <span class="kw-2">&amp;</span>MultiAssetFilter, _dest: <span class="kw-2">&amp;</span>MultiLocation) -&gt; Weight {
 		<span class="comment">// Hardcoded till the XCM pallet is fixed
-		</span><span class="kw">let </span>hardcoded_weight = Weight::from_ref_time(<span class="number">1_000_000_000 </span><span class="kw">as </span>u64);
+		</span><span class="kw">let </span>hardcoded_weight = Weight::from_parts(<span class="number">1_000_000_000 </span><span class="kw">as </span>u64, <span class="number">0</span>);
 		<span class="kw">let </span>weight = assets.weigh_multi_assets(XcmFungibleWeight::&lt;Runtime&gt;::deposit_asset());
 		hardcoded_weight.min(weight)
 	}

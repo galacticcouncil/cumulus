@@ -232,8 +232,8 @@
 			suspend_threshold: pre.suspend_threshold,
 			drop_threshold: pre.drop_threshold,
 			resume_threshold: pre.resume_threshold,
-			threshold_weight: Weight::from_ref_time(pre.threshold_weight),
-			weight_restrict_decay: Weight::from_ref_time(pre.weight_restrict_decay),
+			threshold_weight: Weight::from_parts(pre.threshold_weight, <span class="number">0</span>),
+			weight_restrict_decay: Weight::from_parts(pre.weight_restrict_decay, <span class="number">0</span>),
 			xcmp_max_individual_weight: Weight::from_parts(
 				pre.xcmp_max_individual_weight,
 				DEFAULT_POV_SIZE,

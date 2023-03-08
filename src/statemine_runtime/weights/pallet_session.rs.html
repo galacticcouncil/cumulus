@@ -134,8 +134,8 @@
 		//  Measured:  `270`
 		//  Estimated: `5490`
 		// Minimum execution time: 15_187 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">15_459_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">5490</span>))
+		</span>Weight::from_parts(<span class="number">15_459_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">5490</span>))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">2</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">2</span>))
 	}
@@ -148,8 +148,8 @@
 		//  Measured:  `242`
 		//  Estimated: `2959`
 		// Minimum execution time: 11_795 nanoseconds.
-		</span>Weight::from_ref_time(<span class="number">11_994_000</span>)
-			.saturating_add(Weight::from_proof_size(<span class="number">2959</span>))
+		</span>Weight::from_parts(<span class="number">11_994_000</span>, <span class="number">0</span>)
+			.saturating_add(Weight::from_parts(<span class="number">0</span>, <span class="number">2959</span>))
 			.saturating_add(T::DbWeight::get().reads(<span class="number">1</span>))
 			.saturating_add(T::DbWeight::get().writes(<span class="number">2</span>))
 	}

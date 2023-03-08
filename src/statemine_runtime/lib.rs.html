@@ -1089,6 +1089,34 @@
 <a href="#1089" id="1089">1089</a>
 <a href="#1090" id="1090">1090</a>
 <a href="#1091" id="1091">1091</a>
+<a href="#1092" id="1092">1092</a>
+<a href="#1093" id="1093">1093</a>
+<a href="#1094" id="1094">1094</a>
+<a href="#1095" id="1095">1095</a>
+<a href="#1096" id="1096">1096</a>
+<a href="#1097" id="1097">1097</a>
+<a href="#1098" id="1098">1098</a>
+<a href="#1099" id="1099">1099</a>
+<a href="#1100" id="1100">1100</a>
+<a href="#1101" id="1101">1101</a>
+<a href="#1102" id="1102">1102</a>
+<a href="#1103" id="1103">1103</a>
+<a href="#1104" id="1104">1104</a>
+<a href="#1105" id="1105">1105</a>
+<a href="#1106" id="1106">1106</a>
+<a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
 </pre><pre class="rust"><code><span class="comment">// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -1155,7 +1183,7 @@
 	Index, Signature, AVERAGE_ON_INITIALIZE_RATIO, HOURS, MAXIMUM_BLOCK_WEIGHT,
 	NORMAL_DISPATCH_RATIO, SLOT_DURATION,
 };
-<span class="kw">use </span>xcm_config::{KsmLocation, XcmConfig};
+<span class="kw">use </span>xcm_config::{KsmLocation, TrustBackedAssetsConvertedConcreteId, XcmConfig};
 
 <span class="attr">#[cfg(any(feature = <span class="string">&quot;std&quot;</span>, test))]
 </span><span class="kw">pub use </span>sp_runtime::BuildStorage;
@@ -1919,6 +1947,34 @@
 		}
 		<span class="kw">fn </span>query_length_to_fee(length: u32) -&gt; Balance {
 			TransactionPayment::length_to_fee(length)
+		}
+	}
+
+	<span class="kw">impl </span>assets_common::runtime_api::FungiblesApi&lt;
+		Block,
+		AccountId,
+	&gt; <span class="kw">for </span>Runtime
+	{
+		<span class="kw">fn </span>query_account_balances(account: AccountId) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;xcm::latest::MultiAsset&gt;, assets_common::runtime_api::FungiblesAccessError&gt; {
+			<span class="kw">use </span>assets_common::fungible_conversion::{convert, convert_balance};
+			<span class="prelude-val">Ok</span>([
+				<span class="comment">// collect pallet_balance
+				</span>{
+					<span class="kw">let </span>balance = Balances::free_balance(account.clone());
+					<span class="kw">if </span>balance &gt; <span class="number">0 </span>{
+						<span class="macro">vec!</span>[convert_balance::&lt;KsmLocation, Balance&gt;(balance)<span class="question-mark">?</span>]
+					} <span class="kw">else </span>{
+						<span class="macro">vec!</span>[]
+					}
+				},
+				<span class="comment">// collect pallet_assets (TrustBackedAssets)
+				</span>convert::&lt;<span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>, TrustBackedAssetsConvertedConcreteId&gt;(
+					Assets::account_balances(account)
+						.iter()
+						.filter(|(<span class="kw">_</span>, balance)| balance &gt; <span class="kw-2">&amp;</span><span class="number">0</span>)
+				)<span class="question-mark">?</span>,
+				<span class="comment">// collect ... e.g. pallet_assets ForeignAssets
+			</span>].concat())
 		}
 	}
 

@@ -879,8 +879,6 @@
 <a href="#879" id="879">879</a>
 <a href="#880" id="880">880</a>
 <a href="#881" id="881">881</a>
-<a href="#882" id="882">882</a>
-<a href="#883" id="883">883</a>
 </pre><pre class="rust"><code><span class="comment">// Copyright 2019-2021 Parity Technologies (UK) Ltd.
 // This file is part of Cumulus.
 
@@ -1135,14 +1133,15 @@
 			polkadot_service::IsCollator::Yes(CollatorPair::generate().<span class="number">0</span>)
 		},
 		<span class="prelude-val">None</span>,
-	)<span class="question-mark">?</span>;
+	)
+	.map_err(|e| RelayChainError::Application(Box::new(e) <span class="kw">as </span>Box&lt;<span class="kw">_</span>&gt;))<span class="question-mark">?</span>;
 
 	task_manager.add_child(relay_chain_full_node.task_manager);
 	<span class="macro">tracing::info!</span>(<span class="string">&quot;Using inprocess node.&quot;</span>);
 	<span class="prelude-val">Ok</span>(Arc::new(RelayChainInProcessInterface::new(
 		relay_chain_full_node.client.clone(),
 		relay_chain_full_node.backend.clone(),
-		Arc::new(relay_chain_full_node.network.clone()),
+		relay_chain_full_node.sync_service.clone(),
 		relay_chain_full_node.overseer_handle.ok_or(RelayChainError::GenericError(
 			<span class="string">&quot;Overseer should be running in full node.&quot;</span>.to_string(),
 		))<span class="question-mark">?</span>,
@@ -1192,14 +1191,10 @@
 		<span class="kw-2">&amp;mut </span>task_manager,
 	)
 	.<span class="kw">await
-	</span>.map_err(|e| <span class="kw">match </span>e {
-		RelayChainError::ServiceError(polkadot_service::Error::Sub(x)) =&gt; x,
-		s =&gt; s.to_string().into(),
-	})<span class="question-mark">?</span>;
+	</span>.map_err(|e| sc_service::Error::Application(Box::new(e) <span class="kw">as </span>Box&lt;<span class="kw">_</span>&gt;))<span class="question-mark">?</span>;
 
 	<span class="kw">let </span>import_queue_service = params.import_queue.service();
-
-	<span class="kw">let </span>(network, system_rpc_tx, tx_handler_controller, start_network) =
+	<span class="kw">let </span>(network, system_rpc_tx, tx_handler_controller, start_network, sync_service) =
 		build_network(BuildNetworkParams {
 			parachain_config: <span class="kw-2">&amp;</span>parachain_config,
 			client: client.clone(),
@@ -1227,14 +1222,15 @@
 		keystore: params.keystore_container.sync_keystore(),
 		backend: backend.clone(),
 		network: network.clone(),
+		sync_service: sync_service.clone(),
 		system_rpc_tx,
 		tx_handler_controller,
 		telemetry: <span class="prelude-val">None</span>,
 	})<span class="question-mark">?</span>;
 
 	<span class="kw">let </span>announce_block = {
-		<span class="kw">let </span>network = network.clone();
-		Arc::new(<span class="kw">move </span>|hash, data| network.announce_block(hash, data))
+		<span class="kw">let </span>sync_service = sync_service.clone();
+		Arc::new(<span class="kw">move </span>|hash, data| sync_service.announce_block(hash, data))
 	};
 
 	<span class="kw">let </span>announce_block = wrap_announce_block
@@ -1675,7 +1671,7 @@
 		<span class="self">self</span>.send_extrinsic(
 			runtime::SudoCall::sudo_unchecked_weight {
 				call: Box::new(call.into()),
-				weight: Weight::from_ref_time(<span class="number">1_000</span>),
+				weight: Weight::from_parts(<span class="number">1_000</span>, <span class="number">0</span>),
 			},
 			Sr25519Keyring::Alice,
 		)

@@ -1335,7 +1335,7 @@
 		/// Events:
 		/// - `OverweightServiced`: On success.
 		</span><span class="attr">#[pallet::call_index(<span class="number">0</span>)]
-		#[pallet::weight((weight_limit.saturating_add(Weight::from_ref_time(<span class="number">1_000_000</span>)), DispatchClass::Operational))]
+		#[pallet::weight((weight_limit.saturating_add(Weight::from_parts(<span class="number">1_000_000</span>, <span class="number">0</span>)), DispatchClass::Operational))]
 		</span><span class="kw">pub fn </span>service_overweight(
 			origin: OriginFor&lt;T&gt;,
 			index: OverweightIndex,
@@ -1354,7 +1354,7 @@
 				.map_err(|<span class="kw">_</span>| Error::&lt;T&gt;::WeightOverLimit)<span class="question-mark">?</span>;
 			Overweight::&lt;T&gt;::remove(index);
 			<span class="self">Self</span>::deposit_event(Event::OverweightServiced { index, used });
-			<span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(used.saturating_add(Weight::from_ref_time(<span class="number">1_000_000</span>))).into())
+			<span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(used.saturating_add(Weight::from_parts(<span class="number">1_000_000</span>, <span class="number">0</span>))).into())
 		}
 
 		<span class="doccomment">/// Suspends all XCM executions for the XCMP queue, regardless of the sender&#39;s origin.
@@ -1660,8 +1660,8 @@
 			suspend_threshold: <span class="number">2</span>,
 			drop_threshold: <span class="number">5</span>,
 			resume_threshold: <span class="number">1</span>,
-			threshold_weight: Weight::from_ref_time(<span class="number">100_000</span>),
-			weight_restrict_decay: Weight::from_ref_time(<span class="number">2</span>),
+			threshold_weight: Weight::from_parts(<span class="number">100_000</span>, <span class="number">0</span>),
+			weight_restrict_decay: Weight::from_parts(<span class="number">2</span>, <span class="number">0</span>),
 			xcmp_max_individual_weight: Weight::from_parts(
 				<span class="number">20u64 </span>* WEIGHT_REF_TIME_PER_MILLIS,
 				DEFAULT_POV_SIZE,
