@@ -77,7 +77,8 @@ pub struct DeferredMessage<TRuntimeCall> {
 
 // TODO Add callable function handlers for serving the queue or discarding messages in queue
 // TODO we need message ID to be able to work with messages by callable functions
-/// List of deffered messages to process
+// TODO make deferred queue length configurable
+/// List of deferred messages to process
 pub type DeferredMessageList<TRuntimeCall> =
 	BoundedVec<DeferredMessage<TRuntimeCall>, ConstU32<20>>;
 
