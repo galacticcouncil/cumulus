@@ -21,16 +21,18 @@ use cumulus_primitives_core::{IsSystem, ParaId};
 use frame_support::{
 	parameter_types,
 	traits::{Everything, Nothing, OriginTrait},
+	weights::constants::RocksDbWeight,
 };
 use frame_system::EnsureRoot;
 use sp_core::H256;
+use sp_runtime::traits::BlockNumberProvider;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
 use xcm::prelude::*;
 use xcm_builder::{CurrencyAdapter, FixedWeightBounds, IsConcrete, NativeAsset, ParentIsPreset};
-use xcm_executor::traits::ConvertOrigin;
+use xcm_executor::traits::{ConvertOrigin, ShouldExecute};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -62,7 +64,7 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type DbWeight = ();
+	type DbWeight = RocksDbWeight;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type Index = u64;
@@ -138,6 +140,21 @@ pub type LocalAssetTransactor = CurrencyAdapter<
 
 pub type LocationToAccountId = (ParentIsPreset<AccountId>,);
 
+pub struct BarrierMock {}
+
+impl ShouldExecute for BarrierMock {
+	fn should_execute<RuntimeCall>(
+		_origin: &MultiLocation,
+		_instructions: &mut [Instruction<RuntimeCall>],
+		_max_weight: Weight,
+		_weight_credit: &mut Weight,
+	) -> Result<(), ()> {
+		Ok(())
+	}
+}
+
+pub type FixedWeigher = FixedWeightBounds<UnitWeightCost, RuntimeCall, MaxInstructions>;
+
 pub struct XcmConfig;
 impl xcm_executor::Config for XcmConfig {
 	type RuntimeCall = RuntimeCall;
@@ -148,8 +165,8 @@ impl xcm_executor::Config for XcmConfig {
 	type IsReserve = NativeAsset;
 	type IsTeleporter = NativeAsset;
 	type UniversalLocation = UniversalLocation;
-	type Barrier = ();
-	type Weigher = FixedWeightBounds<UnitWeightCost, RuntimeCall, MaxInstructions>;
+	type Barrier = BarrierMock;
+	type Weigher = FixedWeigher;
 	type Trader = ();
 	type ResponseHandler = ();
 	type AssetTrap = ();
@@ -180,8 +197,8 @@ impl<RuntimeOrigin: OriginTrait> ConvertOrigin<RuntimeOrigin>
 		kind: OriginKind,
 	) -> Result<RuntimeOrigin, MultiLocation> {
 		let origin = origin.into();
-		if kind == OriginKind::Superuser &&
-			matches!(
+		if kind == OriginKind::Superuser
+			&& matches!(
 				origin,
 				MultiLocation {
 					parents: 1,
@@ -195,19 +212,79 @@ impl<RuntimeOrigin: OriginTrait> ConvertOrigin<RuntimeOrigin>
 	}
 }
 
+pub struct XcmDeferFilterMock;
+
+impl XcmDeferFilter<RuntimeCall> for XcmDeferFilterMock {
+	fn deferred_by(
+		_para: ParaId,
+		_sent_at: RelayBlockNumber,
+		xcm: &VersionedXcm<RuntimeCall>,
+	) -> Option<RelayBlockNumber> {
+		let xcm = Xcm::<RuntimeCall>::try_from(xcm.clone()).unwrap();
+		let first = xcm.first().unwrap();
+		match first {
+			ClearOrigin => Some(5),
+			ReserveAssetDeposited(_) => Some(5),
+			RefundSurplus => Some(42),
+			_ => Some(1_000_000),
+		}
+	}
+}
+
+parameter_types! {
+	pub const MaxDeferredMessages: u32 = 20;
+}
+
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type XcmExecutor = xcm_executor::XcmExecutor<XcmConfig>;
 	type ChannelInfo = ParachainSystem;
 	type VersionWrapper = ();
 	type ExecuteOverweightOrigin = EnsureRoot<AccountId>;
+	type ExecuteDeferredOrigin = EnsureRoot<AccountId>;
 	type ControllerOrigin = EnsureRoot<AccountId>;
 	type ControllerOriginConverter = SystemParachainAsSuperuser<RuntimeOrigin>;
 	type WeightInfo = ();
 	type PriceForSiblingDelivery = ();
+	type XcmDeferFilter = XcmDeferFilterMock;
+	type MaxDeferredMessages = MaxDeferredMessages;
+	type RelayChainBlockNumberProvider = RelayBlockNumberProviderMock;
+}
+
+pub struct RelayBlockNumberProviderMock;
+
+impl BlockNumberProvider for RelayBlockNumberProviderMock {
+	type BlockNumber = RelayBlockNumber;
+
+	fn current_block_number() -> RelayBlockNumber {
+		7
+	}
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	t.into()
+
+	let mut r: sp_io::TestExternalities = t.into();
+
+	r.execute_with(|| System::set_block_number(1));
+
+	r
+}
+
+pub fn create_versioned_reserve_asset_deposited() -> VersionedXcm<RuntimeCall> {
+	VersionedXcm::from(Xcm::<RuntimeCall>(vec![Instruction::<RuntimeCall>::ReserveAssetDeposited(
+		MultiAssets::new(),
+	)]))
+}
+
+pub fn format_message(msg: &mut Vec<u8>, encoded_xcm: Vec<u8>) -> &[u8] {
+	msg.extend(XcmpMessageFormat::ConcatenatedVersionedXcm.encode());
+	msg.extend(encoded_xcm.clone());
+	msg
+}
+
+pub fn create_bounded_vec(
+	deferred_xcm_messages: Vec<DeferredMessage<RuntimeCall>>,
+) -> BoundedVec<DeferredMessage<RuntimeCall>, MaxDeferredMessages> {
+	deferred_xcm_messages.try_into().unwrap()
 }

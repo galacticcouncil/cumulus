@@ -13,6 +13,7 @@ scale-info = { version = "2.3.1", default-features = false, features = ["derive"
 # Substrate
 frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.38" }
 frame-system = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.38" }
+sp-core = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.38" }
 sp-io = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.38" }
 sp-runtime = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.38" }
 sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v0.9.38" }
@@ -29,9 +30,9 @@ cumulus-primitives-core = { path = "../../primitives/core", default-features = f
 frame-benchmarking = { default-features = false, optional = true, git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.38" }
 
 [dev-dependencies]
+pretty_assertions = "1.3.0"
 
 # Substrate
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.38" }
 pallet-balances = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.38" }
 
 # Polkadot
@@ -50,6 +51,7 @@ std = [
 	"frame-system/std",
 	"log/std",
 	"polkadot-runtime-common/std",
+	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
@@ -61,5 +63,6 @@ runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"xcm-builder/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]
