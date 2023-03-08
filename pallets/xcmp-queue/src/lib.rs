@@ -728,23 +728,8 @@ impl<T: Config> Pallet<T> {
 		max_weight: Weight,
 		max_individual_weight: Weight,
 	) -> (Weight, bool) {
-		let data = <InboundXcmpMessages<T>>::get(sender, sent_at);
-		let deferred_messages = DeferredXcmMessages::<T>::take(sender)
-			.into_iter()
-			.filter(|m| m.deferred_to <= sent_at)
-			.collect::<Vec<DeferredMessage<_>>>();
 		let mut weight_used = Weight::zero();
-		for msg in deferred_messages {
-			let weight = max_weight.saturating_sub(weight_used);
-			match Self::handle_xcm_message(sender, sent_at, msg.xcm, weight) {
-				Ok(used) => weight_used = weight_used.saturating_add(used),
-				// TODO: store unprocessed messages
-				Err(_) => todo!(),
-			}
-		}
-		if max_weight.saturating_sub(weight_used).any_eq(Weight::zero()) {
-			return (weight_used, false);
-		}
+		let data = <InboundXcmpMessages<T>>::get(sender, sent_at);
 		let mut last_remaining_fragments;
 		let mut remaining_fragments = &data[..];
 		match format {
@@ -984,9 +969,27 @@ impl<T: Config> Pallet<T> {
 			} else {
 				// Process up to one block's worth for now.
 				let weight_remaining = weight_available.saturating_sub(weight_used);
+
+				let (sent_at, format) = status[index].message_metadata[0];
+
+				let deferred_messages = DeferredXcmMessages::<T>::get(sender)
+					.into_iter()
+					.filter(|m| m.deferred_to <= sent_at)
+					.collect::<Vec<DeferredMessage<_>>>();
+				let mut weight_used = Weight::zero();
+				for msg in deferred_messages {
+					let weight = weight_remaining.saturating_sub(weight_used);
+					match Self::handle_xcm_message(sender, sent_at, msg.xcm, weight) {
+						Ok(used) => weight_used = weight_used.saturating_add(used),
+						// TODO: store unprocessed messages
+						Err(_) => todo!(),
+					}
+				}
+				weight_remaining.saturating_sub(weight_used);
+
 				let (weight_processed, is_empty) = Self::process_xcmp_message(
 					sender,
-					status[index].message_metadata[0],
+					(sent_at, format),
 					&mut messages_processed,
 					weight_remaining,
 					xcmp_max_individual_weight,
