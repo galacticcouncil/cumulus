@@ -16,11 +16,13 @@
 use super::*;
 use crate::mock::System;
 use cumulus_primitives_core::XcmpMessageHandler;
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, bounded_vec};
 use frame_system::EventRecord;
 use mock::{new_test_ext, RuntimeCall, RuntimeOrigin, Test, XcmpQueue};
 use sp_runtime::traits::BadOrigin;
 use sp_runtime::BoundedVec;
+
+use pretty_assertions::assert_eq;
 
 #[test]
 fn one_message_does_not_panic() {
@@ -212,8 +214,8 @@ fn handle_xcmp_messages_should_be_able_to_store_multiple_messages_at_same_block(
 		};
 
 		assert_eq!(
+			create_bounded_vec(vec![deferred_message.clone(), deferred_message]),
 			DeferredXcmMessages::<Test>::get(para_id),
-			create_bounded_vec(vec![deferred_message.clone(), deferred_message])
 		);
 
 		assert_last_event::<Test>(
@@ -322,7 +324,6 @@ fn handle_xcmp_messages_should_execute_deferred_message_from_different_blocks() 
 }
 
 #[test]
-#[ignore]
 fn deferred_xcm_should_be_executed_and_removed_from_storage() {
 	new_test_ext().execute_with(|| {
 		//Arrange
@@ -340,10 +341,16 @@ fn deferred_xcm_should_be_executed_and_removed_from_storage() {
 		//Act
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 		System::set_block_number(6);
+		let messages = vec![(para_id, 6u32.into(), message_format.as_slice())];
 		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
 
 		//Assert
-		assert_eq!(DeferredXcmMessages::<Test>::get(para_id), create_bounded_vec(vec![]));
+		let expected_msg =
+			DeferredMessage { sent_at: 6, deferred_to: 11, xcm: versioned_xcm, sender: para_id };
+		assert_eq!(
+			DeferredXcmMessages::<Test>::get(para_id),
+			create_bounded_vec(vec![expected_msg])
+		);
 	});
 }
 

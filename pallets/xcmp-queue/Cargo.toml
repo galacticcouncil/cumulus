@@ -41,6 +41,8 @@ xcm-builder = { git = "https://github.com/paritytech/polkadot", branch = "releas
 # Cumulus
 cumulus-pallet-parachain-system = { path = "../parachain-system" }
 
+pretty_assertions = "*"
+
 [features]
 default = [ "std" ]
 std = [

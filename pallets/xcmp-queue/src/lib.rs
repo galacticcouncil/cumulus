@@ -972,18 +972,32 @@ impl<T: Config> Pallet<T> {
 
 				let (sent_at, format) = status[index].message_metadata[0];
 
-				let deferred_messages = DeferredXcmMessages::<T>::get(sender)
-					.into_iter()
-					.filter(|m| m.deferred_to <= sent_at)
-					.collect::<Vec<DeferredMessage<_>>>();
 				let mut weight_used = Weight::zero();
-				for msg in deferred_messages {
+				let mut deferred_messages = DeferredXcmMessages::<T>::get(sender);
+				let mut msg_on_err = None;
+				let mut iter = deferred_messages.into_iter();
+				for _ in iter.by_ref().filter(|m| m.deferred_to <= sent_at).take_while(|msg| {
 					let weight = weight_remaining.saturating_sub(weight_used);
-					match Self::handle_xcm_message(sender, sent_at, msg.xcm, weight) {
-						Ok(used) => weight_used = weight_used.saturating_add(used),
+					match Self::handle_xcm_message(sender, sent_at, msg.xcm.clone(), weight) {
+						Ok(used) => {
+							weight_used = weight_used.saturating_add(used);
+							return true;
+						},
 						// TODO: store unprocessed messages
-						Err(_) => todo!(),
+						Err(XcmError::WeightLimitReached(required)) => {
+							msg_on_err = Some(msg.clone());
+							return false;
+						},
+						Err(_) => return false,
 					}
+				}) {}
+				let new_deferred_messages: Vec<DeferredMessage<_>> =
+					msg_on_err.into_iter().chain(iter).collect();
+				if !new_deferred_messages.is_empty() {
+					DeferredXcmMessages::<T>::insert(
+						sender,
+						BoundedVec::truncate_from(new_deferred_messages),
+					);
 				}
 				weight_remaining.saturating_sub(weight_used);
 
