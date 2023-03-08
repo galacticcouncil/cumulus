@@ -77,7 +77,6 @@ pub struct DeferredMessage<TRuntimeCall> {
 
 // TODO Add callable function handlers for serving the queue or discarding messages in queue
 // TODO we need message ID to be able to work with messages by callable functions
-// TODO Limits on the number of messages in the queue, and the total size of the queue
 /// List of deffered messages to process
 pub type DeferredMessageList<TRuntimeCall> =
 	BoundedVec<DeferredMessage<TRuntimeCall>, ConstU32<20>>;
@@ -91,11 +90,13 @@ const MAX_MESSAGES_PER_BLOCK: u8 = 10;
 // Maximum amount of messages that can exist in the overweight queue at any given time.
 const MAX_OVERWEIGHT_MESSAGES: u32 = 1000;
 
+/// Determine whether to execute incoming messages directly or defer them by a certain amount
+/// of relay chain blocks.
 pub trait XcmDeferFilter<TRuntimeCall> {
 	fn deferred_by(
 		para: ParaId,
 		sent_at: RelayBlockNumber,
-		xcm: &Xcm<TRuntimeCall>,
+		xcm: &VersionedXcm<TRuntimeCall>,
 	) -> Option<RelayBlockNumber>;
 }
 
@@ -103,7 +104,7 @@ impl<TRuntimeCall> XcmDeferFilter<TRuntimeCall> for () {
 	fn deferred_by(
 		para: ParaId,
 		sent_at: RelayBlockNumber,
-		xcm: &Xcm<TRuntimeCall>,
+		xcm: &VersionedXcm<TRuntimeCall>,
 	) -> Option<RelayBlockNumber> {
 		None
 	}
@@ -161,6 +162,7 @@ pub mod pallet {
 		}
 
 		fn on_idle(_now: T::BlockNumber, max_weight: Weight) -> Weight {
+			// TODO: process deferred messages on idle, we would need a relay chain block number, though.
 			// on_idle processes additional messages with any remaining block weight.
 			Self::service_xcmp_queue(max_weight, 0)
 		}
@@ -743,14 +745,12 @@ impl<T: Config> Pallet<T> {
 						&mut remaining_fragments,
 					) {
 						let weight = max_weight.saturating_sub(weight_used);
-
-						let xcm_struct = Xcm::<T::RuntimeCall>::try_from(xcm.clone()).unwrap(); //TODO: deferredby should accept versionXCM
 						if let Some(defer_by) =
-							T::XcmDeferFilter::deferred_by(sender, sent_at, &xcm_struct)
+							T::XcmDeferFilter::deferred_by(sender, sent_at, &xcm)
 						{
 							let deferred_to = sent_at + defer_by;
 
-							DeferredXcmMessages::<T>::try_append(
+							let _ = DeferredXcmMessages::<T>::try_append(
 								sender,
 								DeferredMessage { sender, xcm, sent_at, deferred_to },
 							)
@@ -764,7 +764,6 @@ impl<T: Config> Pallet<T> {
 								Self::deposit_event(e);
 							})
 							.map_err(|()| {
-								//TODO what to do here? log error?
 								Self::deposit_event(Event::XcmDeferredQueueFull {});
 							});
 						} else {
@@ -1046,7 +1045,8 @@ impl<T: Config> Pallet<T> {
 				max_weight.saturating_sub(weight_used),
 			));
 
-			if (!deferred_messages.is_empty()) {
+			// store unprocessed messages after `drain` is done to avoid interfering with the iterator
+			if !deferred_messages.is_empty() {
 				unprocessed.push((sender, deferred_messages));
 			}
 		}
@@ -1069,7 +1069,7 @@ impl<T: Config> Pallet<T> {
 		let mut weight_used = Weight::zero();
 
 		deferred_messages.retain(|msg| {
-			if (msg.deferred_to > relay_chain_block) {
+			if msg.deferred_to > relay_chain_block {
 				return true;
 			}
 
@@ -1080,9 +1080,10 @@ impl<T: Config> Pallet<T> {
 					weight_used = weight_used.saturating_add(used);
 					return false;
 				},
-				Err(XcmError::WeightLimitReached(required)) => {
+				Err(XcmError::WeightLimitReached(_)) => {
 					return true;
 				},
+				// TODO: implement support for detecting and storing overweight messages
 				Err(_) => return false,
 			}
 		});

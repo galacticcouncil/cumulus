@@ -214,7 +214,7 @@ impl XcmDeferFilter<RuntimeCall> for XcmDeferFilterMock {
 	fn deferred_by(
 		para: ParaId,
 		sent_at: RelayBlockNumber,
-		xcm: &Xcm<RuntimeCall>,
+		xcm: &VersionedXcm<RuntimeCall>,
 	) -> Option<RelayBlockNumber> {
 		Some(5)
 	}
