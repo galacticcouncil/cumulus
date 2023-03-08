@@ -974,25 +974,12 @@ impl<T: Config> Pallet<T> {
 
 				let mut weight_used = Weight::zero();
 				let mut deferred_messages = DeferredXcmMessages::<T>::take(sender);
-				deferred_messages.retain(|msg| {
-					if (msg.deferred_to > sent_at) {
-						return true;
-					}
-
-					let weight = weight_remaining.saturating_sub(weight_used);
-
-					match Self::handle_xcm_message(sender, msg.sent_at, msg.xcm.clone(), weight) {
-						Ok(used) => {
-							weight_used = weight_used.saturating_add(used);
-							return false;
-						},
-						// TODO: store unprocessed messages
-						Err(XcmError::WeightLimitReached(required)) => {
-							return true;
-						},
-						Err(_) => return false,
-					}
-				});
+				weight_used = weight_used.saturating_add(Self::process_deferred_messages(
+					sender,
+					sent_at,
+					&mut deferred_messages,
+					weight_remaining.saturating_sub(weight_used),
+				));
 
 				if !deferred_messages.is_empty() {
 					DeferredXcmMessages::<T>::insert(sender, deferred_messages);
@@ -1052,25 +1039,12 @@ impl<T: Config> Pallet<T> {
 		let mut unprocessed = Vec::new();
 
 		for (sender, mut deferred_messages) in DeferredXcmMessages::<T>::drain() {
-			deferred_messages.retain(|msg| {
-				if (msg.deferred_to > relay_chain_block_number) {
-					return true;
-				}
-
-				let weight = max_weight.saturating_sub(weight_used);
-
-				match Self::handle_xcm_message(sender, msg.sent_at, msg.xcm.clone(), weight) {
-					Ok(used) => {
-						weight_used = weight_used.saturating_add(used);
-						return false;
-					},
-					// TODO: store unprocessed messages
-					Err(XcmError::WeightLimitReached(required)) => {
-						return true;
-					},
-					Err(_) => return false,
-				}
-			});
+			weight_used = weight_used.saturating_add(Self::process_deferred_messages(
+				sender,
+				relay_chain_block_number,
+				&mut deferred_messages,
+				max_weight.saturating_sub(weight_used),
+			));
 
 			if (!deferred_messages.is_empty()) {
 				unprocessed.push((sender, deferred_messages));
@@ -1080,6 +1054,38 @@ impl<T: Config> Pallet<T> {
 		for (sender, new_deferred_messages) in unprocessed {
 			DeferredXcmMessages::<T>::insert(sender, new_deferred_messages);
 		}
+
+		weight_used
+	}
+
+	/// Process `deferred_messages` from `sender` that were deferred until `relay_chain_block`
+	/// Returns the `weight_used` and removes processed messages from the `deferred_messages` vector.
+	fn process_deferred_messages(
+		sender: ParaId,
+		relay_chain_block: RelayBlockNumber,
+		deferred_messages: &mut DeferredMessageList<T::RuntimeCall>,
+		max_weight: Weight,
+	) -> Weight {
+		let mut weight_used = Weight::zero();
+
+		deferred_messages.retain(|msg| {
+			if (msg.deferred_to > relay_chain_block) {
+				return true;
+			}
+
+			let weight = max_weight.saturating_sub(weight_used);
+
+			match Self::handle_xcm_message(sender, msg.sent_at, msg.xcm.clone(), weight) {
+				Ok(used) => {
+					weight_used = weight_used.saturating_add(used);
+					return false;
+				},
+				Err(XcmError::WeightLimitReached(required)) => {
+					return true;
+				},
+				Err(_) => return false,
+			}
+		});
 
 		weight_used
 	}
