@@ -30,7 +30,7 @@ use sp_runtime::{
 };
 use xcm::prelude::*;
 use xcm_builder::{CurrencyAdapter, FixedWeightBounds, IsConcrete, NativeAsset, ParentIsPreset};
-use xcm_executor::traits::ConvertOrigin;
+use xcm_executor::traits::{ConvertOrigin, ShouldExecute};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -138,6 +138,15 @@ pub type LocalAssetTransactor = CurrencyAdapter<
 
 pub type LocationToAccountId = (ParentIsPreset<AccountId>,);
 
+
+pub struct BarrierMock {}
+
+impl ShouldExecute for BarrierMock {
+	fn should_execute<RuntimeCall>(origin: &MultiLocation, instructions: &mut [Instruction<RuntimeCall>], max_weight: Weight, weight_credit: &mut Weight) -> Result<(), ()> {
+		Ok(())
+	}
+}
+
 pub struct XcmConfig;
 impl xcm_executor::Config for XcmConfig {
 	type RuntimeCall = RuntimeCall;
@@ -148,7 +157,7 @@ impl xcm_executor::Config for XcmConfig {
 	type IsReserve = NativeAsset;
 	type IsTeleporter = NativeAsset;
 	type UniversalLocation = UniversalLocation;
-	type Barrier = ();
+	type Barrier = BarrierMock;
 	type Weigher = FixedWeightBounds<UnitWeightCost, RuntimeCall, MaxInstructions>;
 	type Trader = ();
 	type ResponseHandler = ();

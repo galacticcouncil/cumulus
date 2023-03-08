@@ -1051,35 +1051,39 @@ impl<T: Config> Pallet<T> {
 		relay_chain_block_number: RelayBlockNumber,
 		mut messages_processed: u8,
 	) -> (Weight, u8) {
-		let mut to_remove = vec![];
-		for (id, messages) in DeferredXcmMessages::<T>::iter() {
-			// TODO: store messages back that were not processed
-			let messages_remaining = messages
-				.iter()
-				.filter(|m| m.deferred_to <= relay_chain_block_number)
-				.take_while(|item| {
-					let result = Self::handle_xcm_message(
-						item.sender,
-						item.sent_at,
-						item.xcm.clone(),
-						max_weight,
-					);
-					//TODO: error handling
-					//TODO: store the original block in DeferredXcmMessages because we need to pass it above instead of the block
+		let mut weight_used = Weight::zero();
 
-					messages_processed += 1;
-					messages_processed < MAX_MESSAGES_PER_BLOCK
-					//TODO: and decrease the weight we have remanining
-				})
-				.collect::<Vec<_>>();
-
-			if !messages_remaining.is_empty() {
-				to_remove.push(id);
+		for (sender, messages) in DeferredXcmMessages::<T>::iter() {
+			let mut msg_on_err = None;
+			let lensss = messages.len();
+			let mut iter = messages.into_iter();
+			for _ in iter.by_ref().filter(|m| m.deferred_to <= relay_chain_block_number).take_while(|msg| {
+				let weight = max_weight.saturating_sub(weight_used);
+				match Self::handle_xcm_message(sender, relay_chain_block_number, msg.xcm.clone(), weight) {
+					Ok(used) => {
+						weight_used = weight_used.saturating_add(used);
+						return true;
+					},
+					// TODO: store unprocessed messages
+					Err(XcmError::WeightLimitReached(required)) => {
+						msg_on_err = Some(msg.clone());
+						return false;
+					},
+					Err(err) => {
+						let s = err;
+						return false;
+					},
+				}
+			}) {}
+			let lens = iter.len();
+			let new_deferred_messages: Vec<DeferredMessage<_>> =
+				msg_on_err.into_iter().chain(iter).collect();
+			if !new_deferred_messages.is_empty() {
+				DeferredXcmMessages::<T>::insert(
+					sender,
+					BoundedVec::truncate_from(new_deferred_messages),
+				);
 			}
-		}
-
-		for id in to_remove {
-			DeferredXcmMessages::<T>::remove(id);
 		}
 
 		//loop through old blocks and collect it to a list

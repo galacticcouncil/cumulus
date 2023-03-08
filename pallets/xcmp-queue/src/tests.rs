@@ -340,16 +340,16 @@ fn deferred_xcm_should_be_executed_and_removed_from_storage() {
 
 		//Act
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
-		System::set_block_number(6);
 		let messages = vec![(para_id, 6u32.into(), message_format.as_slice())];
 		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
 
 		//Assert
 		let expected_msg =
 			DeferredMessage { sent_at: 6, deferred_to: 11, xcm: versioned_xcm, sender: para_id };
+
 		assert_eq!(
-			DeferredXcmMessages::<Test>::get(para_id),
-			create_bounded_vec(vec![expected_msg])
+			create_bounded_vec(vec![expected_msg]),
+			DeferredXcmMessages::<Test>::get(para_id)
 		);
 	});
 }
