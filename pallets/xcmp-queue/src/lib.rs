@@ -751,6 +751,7 @@ impl<T: Config> Pallet<T> {
 						{
 							let deferred_to = sent_at + defer_by;
 
+							let hash = xcm.using_encoded(sp_io::hashing::blake2_256);
 							let _ = DeferredXcmMessages::<T>::try_append(
 								sender,
 								DeferredMessage { sender, xcm, sent_at, deferred_to },
@@ -760,7 +761,7 @@ impl<T: Config> Pallet<T> {
 									sender,
 									sent_at,
 									deferred_to,
-									message_hash: None, //TODO: remove or hash the message
+									message_hash: Some(hash),
 								};
 								Self::deposit_event(e);
 							})
@@ -874,9 +875,17 @@ impl<T: Config> Pallet<T> {
 		index
 	}
 
-	fn service_queues(max_weight: Weight, relay_block_number: RelayBlockNumber, max_individual_weight: Weight) -> Weight {
+	fn service_queues(
+		max_weight: Weight,
+		relay_block_number: RelayBlockNumber,
+		max_individual_weight: Weight,
+	) -> Weight {
 		let weight_used = Self::service_xcmp_queue(max_weight, 0);
-		weight_used.saturating_add(Self::service_deferred_queue(max_weight.saturating_sub(weight_used), relay_block_number, max_individual_weight))
+		weight_used.saturating_add(Self::service_deferred_queue(
+			max_weight.saturating_sub(weight_used),
+			relay_block_number,
+			max_individual_weight,
+		))
 	}
 
 	/// Service the incoming XCMP message queue attempting to execute up to `max_weight` execution

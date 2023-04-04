@@ -24,11 +24,11 @@ use frame_support::{
 };
 use frame_system::EnsureRoot;
 use sp_core::H256;
+use sp_runtime::traits::BlockNumberProvider;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use sp_runtime::traits::BlockNumberProvider;
 use xcm::prelude::*;
 use xcm_builder::{CurrencyAdapter, FixedWeightBounds, IsConcrete, NativeAsset, ParentIsPreset};
 use xcm_executor::traits::{ConvertOrigin, ShouldExecute};
@@ -255,4 +255,24 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	r.execute_with(|| System::set_block_number(1));
 
 	r
+}
+
+pub fn create_versioned_reserve_asset_deposited() -> VersionedXcm<RuntimeCall> {
+	VersionedXcm::from(Xcm::<RuntimeCall>(vec![Instruction::<RuntimeCall>::ReserveAssetDeposited(
+		MultiAssets::new(),
+	)]))
+}
+
+pub fn format_message(msg: &mut Vec<u8>, encoded_xcm: Vec<u8>) -> &[u8] {
+	msg.extend(XcmpMessageFormat::ConcatenatedVersionedXcm.encode());
+	msg.extend(encoded_xcm.clone());
+	msg
+}
+
+pub fn create_bounded_vec(
+	deferred_xcm_messages: Vec<DeferredMessage<RuntimeCall>>,
+) -> BoundedVec<DeferredMessage<RuntimeCall>, ConstU32<20>> {
+	let bounded_vec: super::DeferredMessageList<RuntimeCall> =
+		deferred_xcm_messages.try_into().unwrap();
+	bounded_vec
 }
