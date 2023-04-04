@@ -1207,8 +1207,6 @@ impl<T: Config> XcmpMessageHandler for Pallet<T> {
 		status.sort();
 		<InboundXcmpStatus<T>>::put(status);
 
-		// TODO: we currently process up to 2 * max messages because we restart the count
-
 		Self::service_queues(max_weight, last_block_number)
 	}
 }
