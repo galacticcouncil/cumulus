@@ -23,6 +23,8 @@ use frame_system::EventRecord;
 use mock::{new_test_ext, RuntimeCall, RuntimeOrigin, Test, XcmpQueue};
 use sp_runtime::traits::BadOrigin;
 
+use pretty_assertions::assert_eq;
+
 #[test]
 fn one_message_does_not_panic() {
 	new_test_ext().execute_with(|| {
@@ -313,14 +315,14 @@ fn service_deferred_should_execute_deferred_messages() {
 		);
 
 		//Act
-		XcmpQueue::service_deferred(RuntimeOrigin::root(), Weight::MAX);
+		assert_ok!(XcmpQueue::service_deferred(RuntimeOrigin::root(), Weight::MAX));
 
 		//Assert
 		assert_eq!(DeferredXcmMessages::<Test>::get(para_id), create_bounded_vec(vec![]));
-		assert_last_event::<Test>(Event::Success {
-			message_hash: Some(hash),
-			weight: Weight::from_parts(1000000, 1024)
-		}.into());
+		assert_last_event::<Test>(
+			Event::Success { message_hash: Some(hash), weight: Weight::from_parts(1000000, 1024) }
+				.into(),
+		);
 	});
 }
 
@@ -349,7 +351,10 @@ fn service_deferred_should_fail_when_called_with_wrong_origin() {
 		);
 
 		//Act and assert
-		assert_noop!(XcmpQueue::service_deferred(RuntimeOrigin::signed(100), Weight::MAX), BadOrigin);
+		assert_noop!(
+			XcmpQueue::service_deferred(RuntimeOrigin::signed(100), Weight::MAX),
+			BadOrigin
+		);
 	});
 }
 
@@ -400,28 +405,71 @@ fn discard_deferred_should_remove_message_from_storage() {
 	new_test_ext().execute_with(|| {
 		//Arrange
 		let versioned_xcm = create_versioned_reserve_asset_deposited();
-		let hash = versioned_xcm.using_encoded(sp_io::hashing::blake2_256);
+		let second_versioned_xcm =
+			VersionedXcm::from(Xcm::<RuntimeCall>(vec![Instruction::<RuntimeCall>::ClearOrigin]));
 		let para_id = ParaId::from(999);
+		let mut xcms = Vec::new();
+		xcms.extend(versioned_xcm.encode());
+		// We put the same message that we will remove to test whether messages with the same hash but different block get removed
+		xcms.extend(second_versioned_xcm.encode());
 		let mut xcmp_message = Vec::new();
-		let messages =
-			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
+		let messages = vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, xcms))];
 
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 
+		let second_hash = second_versioned_xcm.using_encoded(sp_io::hashing::blake2_256);
+		let mut second_xcms = Vec::new();
+		// We put the same message twice to test removal of identical messages
+		second_xcms.extend(second_versioned_xcm.encode());
+		second_xcms.extend(second_versioned_xcm.encode());
+		let mut second_xcmp_message = Vec::new();
+		let second_messages =
+			vec![(para_id, 2u32.into(), format_message(&mut second_xcmp_message, second_xcms))];
+		XcmpQueue::handle_xcmp_messages(second_messages.clone().into_iter(), Weight::MAX);
+
 		let deferred_message = DeferredMessage {
-			sent_at: 1u32.into(),
+			sent_at: 1,
 			sender: para_id,
 			xcm: versioned_xcm.clone(),
 			deferred_to: 6,
 		};
+		let second_deferred_message = DeferredMessage {
+			sent_at: 1,
+			sender: para_id,
+			xcm: second_versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+		let message_to_remove = DeferredMessage {
+			sent_at: 2,
+			sender: para_id,
+			xcm: second_versioned_xcm.clone(),
+			deferred_to: 7,
+		};
 
 		assert_eq!(
 			DeferredXcmMessages::<Test>::get(para_id),
-			create_bounded_vec(vec![deferred_message])
+			create_bounded_vec(vec![
+				deferred_message.clone(),
+				second_deferred_message.clone(),
+				message_to_remove.clone(),
+				message_to_remove
+			])
 		);
 
 		//Act
-		XcmpQueue::discard_deferred(RuntimeOrigin::root());
+		assert_ok!(XcmpQueue::discard_deferred(
+			RuntimeOrigin::root(),
+			para_id,
+			2,
+			Some(7),
+			Some(second_hash)
+		));
+
+		//Assert
+		assert_eq!(
+			DeferredXcmMessages::<Test>::get(para_id),
+			create_bounded_vec(vec![deferred_message, second_deferred_message])
+		);
 	});
 }
 

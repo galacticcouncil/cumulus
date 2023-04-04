@@ -354,14 +354,30 @@ pub mod pallet {
 		#[pallet::call_index(10)]
 		#[pallet::weight((Weight::from_parts(1_000_000, 0), DispatchClass::Operational))]
 		pub fn discard_deferred(
-			origin: OriginFor<T>
+			origin: OriginFor<T>,
+			para_id: ParaId,
+			sent_at: RelayBlockNumber,
+			deferred_to: Option<RelayBlockNumber>,
+			maybe_hash: Option<XcmHash>,
 		) -> DispatchResultWithPostInfo {
 			T::ExecuteDeferredOrigin::ensure_origin(origin)?;
+
+			DeferredXcmMessages::<T>::mutate_exists(para_id, |deferred| {
+				deferred.as_mut().map(|d| {
+					d.retain(|msg| {
+						msg.sent_at != sent_at
+							|| Some(msg.deferred_to) != deferred_to
+							|| (maybe_hash.is_some() && {
+								let hash = msg.xcm.using_encoded(sp_io::hashing::blake2_256);
+								Some(hash) != maybe_hash
+							})
+					})
+				});
+			});
 
 			Ok(Some(Weight::from_parts(1_000_000, 0)).into())
 		}
 	}
-
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
