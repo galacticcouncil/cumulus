@@ -401,9 +401,9 @@ fn create_bounded_vec(
 	bounded_vec
 }
 
-/*
+
 #[test]
-fn deferred_xcm_should_be_removed_from_deferred_messages_in_a_consequent_execution() {
+fn handle_xcmp_messages_should_both_defer_and_execute_xcm_message() {
 	new_test_ext().execute_with(|| {
 		//Arrange
 		let assets = MultiAssets::new();
@@ -414,15 +414,23 @@ fn deferred_xcm_should_be_removed_from_deferred_messages_in_a_consequent_executi
 		let mut message_format = XcmpMessageFormat::ConcatenatedVersionedXcm.encode();
 		message_format.extend(xcm.clone());
 		let messages = vec![(ParaId::from(999), 1u32.into(), message_format.as_slice())];
+		let messages2 = vec![(ParaId::from(1000), 7u32.into(), message_format.as_slice())];
 
 		//Act
-		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
+		let expected_msg =
+			DeferredMessage { sent_at: 1, deferred_to:6, xcm: versioned_xcm.clone(), sender: ParaId::from(999) };
+		assert_eq!(DeferredXcmMessages::<Test>::get(ParaId::from(999)), create_bounded_vec(vec![expected_msg]));
+
+		XcmpQueue::handle_xcmp_messages(messages2.into_iter(), Weight::MAX);
 
 		assert_eq!(DeferredXcmMessages::<Test>::get(ParaId::from(999)), create_bounded_vec(vec![]));
 
+		let expected_msg =
+			DeferredMessage { sent_at: 7, deferred_to:12, xcm: versioned_xcm, sender: ParaId::from(1000) };
+		assert_eq!(DeferredXcmMessages::<Test>::get(ParaId::from(1000)), create_bounded_vec(vec![expected_msg]));
 	});
-}*/
+}
 
 #[test]
 fn update_suspend_threshold_works() {
