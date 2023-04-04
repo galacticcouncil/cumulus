@@ -139,6 +139,9 @@ pub mod pallet {
 		/// The origin that is allowed to execute overweight messages.
 		type ExecuteOverweightOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
+		/// The origin that is allowed to execute deferred messages.
+		type ExecuteDeferredOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+
 		/// The origin that is allowed to resume or suspend the XCMP queue.
 		type ControllerOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
@@ -322,6 +325,27 @@ pub mod pallet {
 			QueueConfig::<T>::mutate(|data| data.xcmp_max_individual_weight = new);
 
 			Ok(())
+		}
+
+		//TODO: docs
+		//TODO: benchmark
+		#[pallet::call_index(9)]
+		#[pallet::weight((weight_limit.saturating_add(Weight::from_parts(1_000_000, 0)), DispatchClass::Operational))]
+		pub fn service_deferred(
+			origin: OriginFor<T>,
+			weight_limit: Weight,
+		) -> DispatchResultWithPostInfo {
+			T::ExecuteDeferredOrigin::ensure_origin(origin)?;
+
+			let relay_block_number = T::RelayChainBlockNumberProvider::current_block_number();
+			let QueueConfigData { xcmp_max_individual_weight, .. } = QueueConfig::<T>::get();
+
+			let weight_used = Self::service_deferred_queue(
+				weight_limit,
+				relay_block_number,
+				xcmp_max_individual_weight,
+			);
+			Ok(Some(weight_used.saturating_add(Weight::from_parts(1_000_000, 0))).into())
 		}
 	}
 
