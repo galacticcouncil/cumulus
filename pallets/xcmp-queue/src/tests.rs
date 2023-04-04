@@ -18,6 +18,7 @@ use crate::mock::FixedWeigher;
 use super::*;
 use cumulus_primitives_core::XcmpMessageHandler;
 use frame_support::{assert_noop, assert_ok};
+use frame_support::traits::OnIdle;
 use frame_system::EventRecord;
 use mock::{new_test_ext, RuntimeCall, RuntimeOrigin, Test, XcmpQueue};
 use sp_runtime::traits::BadOrigin;
@@ -263,6 +264,44 @@ fn handle_xcmp_messages_should_execute_deferred_message_and_remove_from_deferred
 
 		XcmpQueue::service_deferred_queue(Weight::MAX, 7, xcmp_max_individual_weight);
 
+		assert_eq!(DeferredXcmMessages::<Test>::get(para_id), create_bounded_vec(vec![]));
+	});
+}
+
+#[test]
+fn on_idle_should_service_deferred_message() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let assets = MultiAssets::new();
+		let versioned_xcm = VersionedXcm::from(Xcm::<RuntimeCall>(vec![
+			Instruction::<RuntimeCall>::ReserveAssetDeposited(assets),
+		]));
+
+		let para_id = ParaId::from(999);
+
+		let xcm = versioned_xcm.encode();
+		let mut message_format = XcmpMessageFormat::ConcatenatedVersionedXcm.encode();
+		message_format.extend(xcm.clone());
+		let messages = vec![(para_id, 1u32.into(), message_format.as_slice())];
+
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+
+		let deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+
+		assert_eq!(
+			DeferredXcmMessages::<Test>::get(para_id),
+			create_bounded_vec(vec![deferred_message])
+		);
+
+		//Act
+		XcmpQueue::on_idle(1, Weight::MAX);
+
+		//Assert
 		assert_eq!(DeferredXcmMessages::<Test>::get(para_id), create_bounded_vec(vec![]));
 	});
 }

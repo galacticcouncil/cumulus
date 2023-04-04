@@ -28,6 +28,7 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
+use sp_runtime::traits::BlockNumberProvider;
 use xcm::prelude::*;
 use xcm_builder::{CurrencyAdapter, FixedWeightBounds, IsConcrete, NativeAsset, ParentIsPreset};
 use xcm_executor::traits::{ConvertOrigin, ShouldExecute};
@@ -233,6 +234,17 @@ impl Config for Test {
 	type WeightInfo = ();
 	type PriceForSiblingDelivery = ();
 	type XcmDeferFilter = XcmDeferFilterMock;
+	type RelayChainBlockNumberProvider = RelayBlockNumberProviderMock;
+}
+
+pub struct RelayBlockNumberProviderMock;
+
+impl BlockNumberProvider for RelayBlockNumberProviderMock {
+	type BlockNumber = RelayBlockNumber;
+
+	fn current_block_number() -> RelayBlockNumber {
+		7
+	}
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

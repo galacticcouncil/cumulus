@@ -115,6 +115,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+	use sp_runtime::traits::BlockNumberProvider;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -151,6 +152,9 @@ pub mod pallet {
 		/// Filter logic to defer XCM message
 		type XcmDeferFilter: XcmDeferFilter<Self::RuntimeCall>;
 
+		/// Relay chain block number provider to allow processing deferred messages on idle
+		type RelayChainBlockNumberProvider: BlockNumberProvider<BlockNumber = RelayBlockNumber>;
+
 		/// The weight information of this pallet.
 		type WeightInfo: WeightInfo;
 	}
@@ -162,9 +166,9 @@ pub mod pallet {
 		}
 
 		fn on_idle(_now: T::BlockNumber, max_weight: Weight) -> Weight {
-			// TODO: process deferred messages on idle, we would need a relay chain block number, though.
-			// on_idle processes additional messages with any remaining block weight.
-			Self::service_xcmp_queue(max_weight, 0)
+			let relay_block_number = T::RelayChainBlockNumberProvider::current_block_number();
+			let QueueConfigData { xcmp_max_individual_weight, .. } = QueueConfig::<T>::get();
+			Self::service_queues(max_weight, relay_block_number, xcmp_max_individual_weight)
 		}
 	}
 
@@ -870,6 +874,11 @@ impl<T: Config> Pallet<T> {
 		index
 	}
 
+	fn service_queues(max_weight: Weight, relay_block_number: RelayBlockNumber, max_individual_weight: Weight) -> Weight {
+		let weight_used = Self::service_xcmp_queue(max_weight, 0);
+		weight_used.saturating_add(Self::service_deferred_queue(max_weight.saturating_sub(weight_used), relay_block_number, max_individual_weight))
+	}
+
 	/// Service the incoming XCMP message queue attempting to execute up to `max_weight` execution
 	/// weight of messages.
 	///
@@ -1219,15 +1228,7 @@ impl<T: Config> XcmpMessageHandler for Pallet<T> {
 		status.sort();
 		<InboundXcmpStatus<T>>::put(status);
 
-		// TODO: we currently process up to 2 * max messages because we restart the count
-		let weight_used = Self::service_xcmp_queue(max_weight, 0);
-		let weight_used = weight_used.saturating_add(Self::service_deferred_queue(
-			max_weight.saturating_sub(weight_used),
-			last_block_number,
-			xcmp_max_individual_weight,
-		));
-
-		weight_used
+		Self::service_queues(max_weight, last_block_number, xcmp_max_individual_weight)
 	}
 }
 
