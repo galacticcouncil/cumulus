@@ -74,7 +74,7 @@ pub struct DeferredMessage<TRuntimeCall> {
 	xcm: VersionedXcm<TRuntimeCall>,
 }
 
-// TODO Add callable function handlers for serving the queue or discarding messages in queue
+// TODO Add callable function for discarding messages in queue
 // TODO we need message ID to be able to work with messages by callable functions
 // TODO make deferred queue length configurable
 /// List of deferred messages to process
@@ -347,7 +347,21 @@ pub mod pallet {
 			);
 			Ok(Some(weight_used.saturating_add(Weight::from_parts(1_000_000, 0))).into())
 		}
+
+		//TODO: docs
+		//TODO: benchmark
+		//TODO: implement
+		#[pallet::call_index(10)]
+		#[pallet::weight((Weight::from_parts(1_000_000, 0), DispatchClass::Operational))]
+		pub fn discard_deferred(
+			origin: OriginFor<T>
+		) -> DispatchResultWithPostInfo {
+			T::ExecuteDeferredOrigin::ensure_origin(origin)?;
+
+			Ok(Some(Weight::from_parts(1_000_000, 0)).into())
+		}
 	}
+
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]

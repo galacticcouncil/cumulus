@@ -396,6 +396,36 @@ fn service_deferred_queue_should_pass_overweight_messages_to_overweight_queue() 
 }
 
 #[test]
+fn discard_deferred_should_remove_message_from_storage() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let versioned_xcm = create_versioned_reserve_asset_deposited();
+		let hash = versioned_xcm.using_encoded(sp_io::hashing::blake2_256);
+		let para_id = ParaId::from(999);
+		let mut xcmp_message = Vec::new();
+		let messages =
+			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
+
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+
+		let deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+
+		assert_eq!(
+			DeferredXcmMessages::<Test>::get(para_id),
+			create_bounded_vec(vec![deferred_message])
+		);
+
+		//Act
+		XcmpQueue::discard_deferred(RuntimeOrigin::root());
+	});
+}
+
+#[test]
 fn handle_xcmp_messages_should_execute_deferred_message_from_different_blocks() {
 	new_test_ext().execute_with(|| {
 		//Arrange
