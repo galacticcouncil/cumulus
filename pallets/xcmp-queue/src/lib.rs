@@ -348,9 +348,17 @@ pub mod pallet {
 			Ok(Some(weight_used.saturating_add(Weight::from_parts(1_000_000, 0))).into())
 		}
 
-		//TODO: docs
+		///This callable discards all deferred messages that match the given parameters.
+		///
+		/// Parameters set to `None` are not matched.
+		///
+		/// - `origin`: Must pass `ExecuteDeferredOrigin`
+		/// - `para_id`: The parachain id where the deferred messages were sent from
+		/// - `sent_at`: The relay chain block number at which the deferred messages were sent
+		/// - `deferred_to`: The relay chain block number to which the deferred messages were deferred to execute
+		/// - `maybe_hash`: The hash of the deferred message
+		///
 		//TODO: benchmark
-		//TODO: implement
 		#[pallet::call_index(10)]
 		#[pallet::weight((Weight::from_parts(1_000_000, 0), DispatchClass::Operational))]
 		pub fn discard_deferred(
@@ -365,12 +373,13 @@ pub mod pallet {
 			DeferredXcmMessages::<T>::mutate_exists(para_id, |deferred| {
 				deferred.as_mut().map(|d| {
 					d.retain(|msg| {
-						msg.sent_at != sent_at
-							|| Some(msg.deferred_to) != deferred_to
-							|| (maybe_hash.is_some() && {
+						// We discard all messages that match the given parameters.
+						!(msg.sent_at == sent_at
+							&& (deferred_to.is_none() || Some(msg.deferred_to) == deferred_to)
+							&& (maybe_hash.is_none() || {
 								let hash = msg.xcm.using_encoded(sp_io::hashing::blake2_256);
-								Some(hash) != maybe_hash
-							})
+								Some(hash) == maybe_hash
+							}))
 					})
 				});
 			});
