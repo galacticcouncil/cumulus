@@ -23,6 +23,27 @@ use frame_system::RawOrigin;
 benchmarks! {
 	set_config_with_u32 {}: update_resume_threshold(RawOrigin::Root, 100)
 	set_config_with_weight {}: update_weight_restrict_decay(RawOrigin::Root, Weight::from_parts(3_000_000, 0))
+	discard_deferred {
+		let para_id = ParaId::from(999);
+		let xcm_message = 	VersionedXcm::from(Xcm::<T::RuntimeCall>(vec![Instruction::<T::RuntimeCall>::ReserveAssetDeposited(
+			MultiAssets::new(),
+		)]));
+		let deferred_message = DeferredMessage {
+			sent_at: 1,
+			deferred_to: 6,
+			sender: para_id,
+			xcm:xcm_message
+		};
+
+		let deferred_xcm_messages = vec![deferred_message];
+		let deferred_xcm_messages = deferred_xcm_messages.try_into().unwrap();
+		crate::Pallet::<T>::inject_deferred_messages(para_id,deferred_xcm_messages);
+		//TODO: continue from here to set up a worst case scenario
+	} :_(RawOrigin::Root, para_id, 1, None, None)
+	verify
+	{
+		assert_eq!(crate::Pallet::<T>::deferred_messages(para_id).len(), 0);
+	}
 }
 
 impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);

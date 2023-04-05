@@ -231,6 +231,11 @@ impl XcmDeferFilter<RuntimeCall> for XcmDeferFilterMock {
 	}
 }
 
+
+parameter_types! {
+	pub const MaxDeferredMessages: u32 = 20;
+}
+
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type XcmExecutor = xcm_executor::XcmExecutor<XcmConfig>;
@@ -243,7 +248,7 @@ impl Config for Test {
 	type WeightInfo = ();
 	type PriceForSiblingDelivery = ();
 	type XcmDeferFilter = XcmDeferFilterMock;
-	type MaxDeferredMessages = ConstU32<20>;
+	type MaxDeferredMessages = MaxDeferredMessages;
 	type RelayChainBlockNumberProvider = RelayBlockNumberProviderMock;
 }
 
@@ -281,6 +286,6 @@ pub fn format_message(msg: &mut Vec<u8>, encoded_xcm: Vec<u8>) -> &[u8] {
 
 pub fn create_bounded_vec(
 	deferred_xcm_messages: Vec<DeferredMessage<RuntimeCall>>,
-) -> BoundedVec<DeferredMessage<RuntimeCall>, ConstU32<20>> {
+) -> BoundedVec<DeferredMessage<RuntimeCall>, MaxDeferredMessages> {
 	deferred_xcm_messages.try_into().unwrap()
 }

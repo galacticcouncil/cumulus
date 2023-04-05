@@ -469,6 +469,7 @@ pub mod pallet {
 
 	/// Inbound aggregate XCMP messages. It can only be one per ParaId.
 	#[pallet::storage]
+	#[pallet::getter(fn deferred_messages)]
 	pub(super) type DeferredXcmMessages<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -1251,6 +1252,17 @@ impl<T: Config> Pallet<T> {
 			} else {
 				debug_assert!(false, "WARNING: Attempt to resume channel that was not suspended.");
 			}
+		});
+	}
+
+	/// Add arbitrary deferred messages to the queue
+	#[cfg(any(test, feature = "runtime-benchmarks"))]
+	fn inject_deferred_messages(
+		sender: ParaId,
+		messages: BoundedVec<DeferredMessage<T::RuntimeCall>, T::MaxDeferredMessages>,
+	) {
+		DeferredXcmMessages::<T>::mutate(sender, |deferred_messages| {
+			*deferred_messages = messages
 		});
 	}
 }
