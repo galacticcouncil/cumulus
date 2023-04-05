@@ -337,7 +337,6 @@ pub mod pallet {
 
 			let relay_block_number = T::RelayChainBlockNumberProvider::current_block_number();
 			let QueueConfigData { xcmp_max_individual_weight, .. } = QueueConfig::<T>::get();
-			ensure!(weight_limit.all_gte(xcmp_max_individual_weight), Error::<T>::WeightOverLimit);
 
 			let weight_used = Self::service_deferred_queue(
 				weight_limit,
