@@ -22,6 +22,9 @@ use frame_support::{
 	parameter_types,
 	traits::{Everything, Nothing, OriginTrait},
 };
+use sp_runtime::SaturatedConversion;
+
+use frame_support::traits::Len;
 use frame_system::EnsureRoot;
 use sp_core::H256;
 use sp_runtime::traits::BlockNumberProvider;
@@ -219,6 +222,8 @@ impl XcmDeferFilter<RuntimeCall> for XcmDeferFilterMock {
 		_sent_at: RelayBlockNumber,
 		_xcm: &VersionedXcm<RuntimeCall>,
 	) -> Option<RelayBlockNumber> {
+		//let deferred_by = _xcm.encode().len();
+		//Some(deferred_by.saturated_into())
 		Some(5)
 	}
 }
