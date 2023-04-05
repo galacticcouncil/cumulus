@@ -322,7 +322,10 @@ pub mod pallet {
 			Ok(())
 		}
 
-		//TODO: docs
+		/// This extrinsic executes deferred messages up to the specified `weight_limit` and the current relay chain block number.
+		/// 
+		/// - `origin`: Must pass `ExecuteDeferredOrigin`.
+		/// - `weight_limit`: Maximum weight budget for deferred message execution.
 		//TODO: benchmark
 		#[pallet::call_index(9)]
 		#[pallet::weight((weight_limit.saturating_add(Weight::from_parts(1_000_000, 0)), DispatchClass::Operational))]
@@ -334,6 +337,7 @@ pub mod pallet {
 
 			let relay_block_number = T::RelayChainBlockNumberProvider::current_block_number();
 			let QueueConfigData { xcmp_max_individual_weight, .. } = QueueConfig::<T>::get();
+			ensure!(weight_limit.all_gte(xcmp_max_individual_weight), Error::<T>::WeightOverLimit);
 
 			let weight_used = Self::service_deferred_queue(
 				weight_limit,
@@ -343,7 +347,7 @@ pub mod pallet {
 			Ok(Some(weight_used.saturating_add(Weight::from_parts(1_000_000, 0))).into())
 		}
 
-		///This callable discards all deferred messages that match the given parameters.
+		/// This extrinsic discards all deferred messages that match the given parameters.
 		///
 		/// Parameters set to `None` are not matched.
 		///
