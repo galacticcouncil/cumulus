@@ -23,7 +23,7 @@ use frame_support::{
 	traits::{Everything, Nothing, OriginTrait},
 };
 use frame_system::EnsureRoot;
-use sp_core::H256;
+use sp_core::{ConstU32, H256};
 use sp_runtime::traits::BlockNumberProvider;
 use sp_runtime::{
 	testing::Header,
@@ -242,6 +242,7 @@ impl Config for Test {
 	type WeightInfo = ();
 	type PriceForSiblingDelivery = ();
 	type XcmDeferFilter = XcmDeferFilterMock;
+	type MaxDeferredMessages = ConstU32<20>;
 	type RelayChainBlockNumberProvider = RelayBlockNumberProviderMock;
 }
 
@@ -280,7 +281,5 @@ pub fn format_message(msg: &mut Vec<u8>, encoded_xcm: Vec<u8>) -> &[u8] {
 pub fn create_bounded_vec(
 	deferred_xcm_messages: Vec<DeferredMessage<RuntimeCall>>,
 ) -> BoundedVec<DeferredMessage<RuntimeCall>, ConstU32<20>> {
-	let bounded_vec: super::DeferredMessageList<RuntimeCall> =
-		deferred_xcm_messages.try_into().unwrap();
-	bounded_vec
+	deferred_xcm_messages.try_into().unwrap()
 }

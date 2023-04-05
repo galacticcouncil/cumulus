@@ -55,7 +55,6 @@ use rand_chacha::{
 };
 use scale_info::TypeInfo;
 use sp_core::bounded::BoundedVec;
-use sp_core::ConstU32;
 use sp_runtime::RuntimeDebug;
 use sp_std::{convert::TryFrom, prelude::*};
 use xcm::{latest::prelude::*, VersionedXcm, WrapVersion, MAX_XCM_DECODE_DEPTH};
@@ -73,13 +72,6 @@ pub struct DeferredMessage<TRuntimeCall> {
 	sender: ParaId,
 	xcm: VersionedXcm<TRuntimeCall>,
 }
-
-// TODO Add callable function for discarding messages in queue
-// TODO we need message ID to be able to work with messages by callable functions
-// TODO make deferred queue length configurable
-/// List of deferred messages to process
-pub type DeferredMessageList<TRuntimeCall> =
-	BoundedVec<DeferredMessage<TRuntimeCall>, ConstU32<20>>;
 
 const LOG_TARGET: &str = "xcmp_queue";
 const DEFAULT_POV_SIZE: u64 = 64 * 1024; // 64 KB
@@ -154,6 +146,9 @@ pub mod pallet {
 
 		/// Filter logic to defer XCM message
 		type XcmDeferFilter: XcmDeferFilter<Self::RuntimeCall>;
+
+		/// The maximum number of messages allowed in the deferred queue.
+		type MaxDeferredMessages: Get<u32>;
 
 		/// Relay chain block number provider to allow processing deferred messages on idle
 		type RelayChainBlockNumberProvider: BlockNumberProvider<BlockNumber = RelayBlockNumber>;
@@ -469,8 +464,13 @@ pub mod pallet {
 
 	/// Inbound aggregate XCMP messages. It can only be one per ParaId.
 	#[pallet::storage]
-	pub(super) type DeferredXcmMessages<T: Config> =
-		StorageMap<_, Blake2_128Concat, ParaId, DeferredMessageList<T::RuntimeCall>, ValueQuery>;
+	pub(super) type DeferredXcmMessages<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		ParaId,
+		BoundedVec<DeferredMessage<T::RuntimeCall>, T::MaxDeferredMessages>,
+		ValueQuery,
+	>;
 
 	/// The non-empty XCMP channels in order of becoming non-empty, and the index of the first
 	/// and last outbound message. If the two indices are equal, then it indicates an empty
@@ -1144,7 +1144,7 @@ impl<T: Config> Pallet<T> {
 	fn process_deferred_messages(
 		sender: ParaId,
 		relay_chain_block: RelayBlockNumber,
-		deferred_messages: &mut DeferredMessageList<T::RuntimeCall>,
+		deferred_messages: &mut BoundedVec<DeferredMessage<T::RuntimeCall>, T::MaxDeferredMessages>,
 		max_weight: Weight,
 		max_individual_weight: Weight,
 	) -> Weight {
