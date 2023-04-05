@@ -1102,6 +1102,7 @@ impl<T: Config> Pallet<T> {
 		weight_used
 	}
 
+	/// Process the deferred messages for all deferred queues up to the relay chain block number.
 	fn service_deferred_queues(
 		max_weight: Weight,
 		relay_chain_block_number: RelayBlockNumber,
@@ -1135,10 +1136,11 @@ impl<T: Config> Pallet<T> {
 		weight_used
 	}
 
+	/// Process the deferred messages for a single queue up to the relay chain block number.
 	fn service_deferred_queue(
 		sender: ParaId,
 		max_weight: Weight,
-		sent_at: RelayBlockNumber,
+		up_to_relay_block_number: RelayBlockNumber,
 		max_individual_weight: Weight,
 	) -> Weight {
 		let mut weight_used = Weight::zero();
@@ -1146,7 +1148,7 @@ impl<T: Config> Pallet<T> {
 		let mut deferred_messages = DeferredXcmMessages::<T>::take(sender);
 		weight_used = weight_used.saturating_add(Self::process_deferred_messages(
 			sender,
-			sent_at,
+			up_to_relay_block_number,
 			&mut deferred_messages,
 			max_weight.saturating_sub(weight_used),
 			max_individual_weight,
