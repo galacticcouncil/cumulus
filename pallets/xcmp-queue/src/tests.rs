@@ -251,7 +251,7 @@ fn handle_xcmp_messages_should_execute_deferred_message_and_remove_from_deferred
 
 		let QueueConfigData { xcmp_max_individual_weight, .. } = <QueueConfig<Test>>::get();
 
-		XcmpQueue::service_deferred_queue(Weight::MAX, 7, xcmp_max_individual_weight);
+		XcmpQueue::service_deferred_queues(Weight::MAX, 7, xcmp_max_individual_weight);
 
 		assert_eq!(DeferredXcmMessages::<Test>::get(para_id), create_bounded_vec(vec![]));
 	});
@@ -296,9 +296,12 @@ fn service_deferred_should_execute_deferred_messages() {
 		let versioned_xcm = create_versioned_reserve_asset_deposited();
 		let hash = versioned_xcm.using_encoded(sp_io::hashing::blake2_256);
 		let para_id = ParaId::from(999);
+		let para_id2 = ParaId::from(1000);
 		let mut xcmp_message = Vec::new();
+		let mut xcmp_message2 = Vec::new();
 		let messages =
-			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
+			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode())),
+				 (para_id2, 2u32.into(), format_message(&mut xcmp_message2, versioned_xcm.encode()))];
 
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 
@@ -315,10 +318,21 @@ fn service_deferred_should_execute_deferred_messages() {
 		);
 
 		//Act
-		assert_ok!(XcmpQueue::service_deferred(RuntimeOrigin::root(), Weight::MAX));
+		assert_ok!(XcmpQueue::service_deferred(RuntimeOrigin::root(), Weight::MAX, para_id));
 
 		//Assert
 		assert_eq!(DeferredXcmMessages::<Test>::get(para_id), create_bounded_vec(vec![]));
+		let deferred_message = DeferredMessage {
+			sent_at: 2u32.into(),
+			sender: para_id2,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 7,
+		};
+
+		assert_eq!(
+			DeferredXcmMessages::<Test>::get(para_id2),
+			create_bounded_vec(vec![deferred_message])
+		);
 		assert_last_event::<Test>(
 			Event::Success { message_hash: Some(hash), weight: Weight::from_parts(1000000, 1024) }
 				.into(),
@@ -352,14 +366,14 @@ fn service_deferred_should_fail_when_called_with_wrong_origin() {
 
 		//Act and assert
 		assert_noop!(
-			XcmpQueue::service_deferred(RuntimeOrigin::signed(100), Weight::MAX),
+			XcmpQueue::service_deferred(RuntimeOrigin::signed(100), Weight::MAX, para_id),
 			BadOrigin
 		);
 	});
 }
 
 #[test]
-fn service_deferred_queue_should_pass_overweight_messages_to_overweight_queue() {
+fn service_deferred_queues_should_pass_overweight_messages_to_overweight_queue() {
 	new_test_ext().execute_with(|| {
 		//Arrange
 		use xcm_executor::traits::WeightBounds;
@@ -391,7 +405,7 @@ fn service_deferred_queue_should_pass_overweight_messages_to_overweight_queue() 
 		assert_eq!(Overweight::<Test>::count(), 0);
 
 		//Act
-		XcmpQueue::service_deferred_queue(low_max_weight, 7, low_max_weight);
+		XcmpQueue::service_deferred_queues(low_max_weight, 7, low_max_weight);
 
 		//Assert
 		assert_eq!(DeferredXcmMessages::<Test>::get(para_id), create_bounded_vec(vec![]));
@@ -642,7 +656,7 @@ fn handle_xcmp_messages_should_execute_deferred_message_from_different_blocks() 
 		let QueueConfigData { xcmp_max_individual_weight, .. } = <QueueConfig<Test>>::get();
 
 		//Act
-		XcmpQueue::service_deferred_queue(Weight::MAX, 6, xcmp_max_individual_weight);
+		XcmpQueue::service_deferred_queues(Weight::MAX, 6, xcmp_max_individual_weight);
 
 		//Assert
 		assert_eq!(DeferredXcmMessages::<Test>::get(para_id), create_bounded_vec(vec![]));

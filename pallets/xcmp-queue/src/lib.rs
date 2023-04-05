@@ -332,7 +332,7 @@ pub mod pallet {
 		pub fn service_deferred(
 			origin: OriginFor<T>,
 			weight_limit: Weight,
-			//TODO: add para_id parameter and only service that deferred queue
+			para_id: ParaId
 		) -> DispatchResultWithPostInfo {
 			T::ExecuteDeferredOrigin::ensure_origin(origin)?;
 
@@ -340,6 +340,7 @@ pub mod pallet {
 			let QueueConfigData { xcmp_max_individual_weight, .. } = QueueConfig::<T>::get();
 
 			let weight_used = Self::service_deferred_queue(
+				para_id,
 				weight_limit,
 				relay_block_number,
 				xcmp_max_individual_weight,
@@ -948,7 +949,7 @@ impl<T: Config> Pallet<T> {
 		max_individual_weight: Weight,
 	) -> Weight {
 		let weight_used = Self::service_xcmp_queue(max_weight, 0);
-		weight_used.saturating_add(Self::service_deferred_queue(
+		weight_used.saturating_add(Self::service_deferred_queues(
 			max_weight.saturating_sub(weight_used),
 			relay_block_number,
 			max_individual_weight,
@@ -1053,20 +1054,8 @@ impl<T: Config> Pallet<T> {
 
 				let (sent_at, format) = status[index].message_metadata[0];
 
-				let mut weight_used = Weight::zero();
-				let mut deferred_messages = DeferredXcmMessages::<T>::take(sender);
-				weight_used = weight_used.saturating_add(Self::process_deferred_messages(
-					sender,
-					sent_at,
-					&mut deferred_messages,
-					weight_remaining.saturating_sub(weight_used),
-					xcmp_max_individual_weight,
-				));
-
-				if !deferred_messages.is_empty() {
-					DeferredXcmMessages::<T>::insert(sender, deferred_messages);
-				}
-				let weight_remaining = weight_remaining.saturating_sub(weight_used);
+				let weight_used_for_queue = Self::service_deferred_queue(sender, weight_remaining, sent_at, xcmp_max_individual_weight);
+				let weight_remaining = weight_remaining.saturating_sub(weight_used_for_queue);
 
 				let (weight_processed, is_empty) = Self::process_xcmp_message(
 					sender,
@@ -1078,7 +1067,7 @@ impl<T: Config> Pallet<T> {
 				if is_empty {
 					status[index].message_metadata.remove(0);
 				}
-				weight_processed
+				weight_processed.saturating_add(weight_used_for_queue)
 			};
 			weight_used += weight_processed;
 
@@ -1113,7 +1102,7 @@ impl<T: Config> Pallet<T> {
 		weight_used
 	}
 
-	fn service_deferred_queue(
+	fn service_deferred_queues(
 		max_weight: Weight,
 		relay_chain_block_number: RelayBlockNumber,
 		max_individual_weight: Weight,
@@ -1141,6 +1130,30 @@ impl<T: Config> Pallet<T> {
 
 		for (sender, new_deferred_messages) in unprocessed {
 			DeferredXcmMessages::<T>::insert(sender, new_deferred_messages);
+		}
+
+		weight_used
+	}
+
+	fn service_deferred_queue(
+		sender: ParaId,
+		max_weight: Weight,
+		sent_at: RelayBlockNumber,
+		max_individual_weight: Weight,
+	) -> Weight {
+		let mut weight_used = Weight::zero();
+
+		let mut deferred_messages = DeferredXcmMessages::<T>::take(sender);
+		weight_used = weight_used.saturating_add(Self::process_deferred_messages(
+			sender,
+			sent_at,
+			&mut deferred_messages,
+			max_weight.saturating_sub(weight_used),
+			max_individual_weight,
+		));
+
+		if !deferred_messages.is_empty() {
+			DeferredXcmMessages::<T>::insert(sender, deferred_messages);
 		}
 
 		weight_used
