@@ -332,6 +332,7 @@ pub mod pallet {
 		pub fn service_deferred(
 			origin: OriginFor<T>,
 			weight_limit: Weight,
+			//TODO: add para_id parameter and only service that deferred queue
 		) -> DispatchResultWithPostInfo {
 			T::ExecuteDeferredOrigin::ensure_origin(origin)?;
 
@@ -1120,6 +1121,9 @@ impl<T: Config> Pallet<T> {
 		let mut weight_used = Weight::zero();
 		let mut unprocessed = Vec::new();
 
+		//TODO: This is currently unbounded because `drain` will go through all storage items in the map
+		//      we want to be able to stop processing as soon as we hit the weight limit (or potentially if we hit
+		//      a message or number of queues limit).
 		for (sender, mut deferred_messages) in DeferredXcmMessages::<T>::drain() {
 			weight_used = weight_used.saturating_add(Self::process_deferred_messages(
 				sender,
@@ -1159,6 +1163,7 @@ impl<T: Config> Pallet<T> {
 			}
 
 			let weight = max_weight.saturating_sub(weight_used);
+			//TODO: consider doing early out when there is no weight left
 
 			match Self::handle_xcm_message(sender, msg.sent_at, msg.xcm.clone(), weight) {
 				Ok(used) => {
