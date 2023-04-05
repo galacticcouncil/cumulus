@@ -21,6 +21,7 @@ use cumulus_primitives_core::{IsSystem, ParaId};
 use frame_support::{
 	parameter_types,
 	traits::{Everything, Nothing, OriginTrait},
+	weights::constants::RocksDbWeight,
 };
 use frame_system::EnsureRoot;
 use sp_core::{ConstU32, H256};
@@ -63,7 +64,7 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type DbWeight = ();
+	type DbWeight = RocksDbWeight;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type Index = u64;

@@ -18,6 +18,7 @@ use crate::mock::*;
 use super::*;
 use cumulus_primitives_core::XcmpMessageHandler;
 use frame_support::traits::OnIdle;
+use frame_support::weights::RuntimeDbWeight;
 use frame_support::{assert_noop, assert_ok};
 use frame_system::EventRecord;
 use mock::{new_test_ext, RuntimeCall, RuntimeOrigin, Test, XcmpQueue};
@@ -299,9 +300,10 @@ fn service_deferred_should_execute_deferred_messages() {
 		let para_id2 = ParaId::from(1000);
 		let mut xcmp_message = Vec::new();
 		let mut xcmp_message2 = Vec::new();
-		let messages =
-			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode())),
-				 (para_id2, 2u32.into(), format_message(&mut xcmp_message2, versioned_xcm.encode()))];
+		let messages = vec![
+			(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode())),
+			(para_id2, 2u32.into(), format_message(&mut xcmp_message2, versioned_xcm.encode())),
+		];
 
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 
@@ -411,6 +413,114 @@ fn service_deferred_queues_should_pass_overweight_messages_to_overweight_queue()
 		assert_eq!(DeferredXcmMessages::<Test>::get(para_id), create_bounded_vec(vec![]));
 		assert_eq!(Overweight::<Test>::get(0), Some((ParaId::from(999), 1, encoded_xcm)));
 		assert_eq!(Overweight::<Test>::count(), 1);
+	});
+}
+
+#[test]
+fn service_deferred_queues_should_stop_processing_when_weight_limit_is_reached_for_different_queues(
+) {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		use xcm_executor::traits::WeightBounds;
+		let mut xcm = Xcm::<RuntimeCall>(vec![Instruction::<RuntimeCall>::ReserveAssetDeposited(
+			MultiAssets::new(),
+		)]);
+		// We just set a very low max weight to stop processing deferred messages early
+		let db_weights: RuntimeDbWeight = <Test as frame_system::Config>::DbWeight::get();
+		let low_max_weight = FixedWeigher::weight(&mut xcm)
+			.unwrap()
+			.saturating_add(db_weights.reads_writes(1, 1));
+		let versioned_xcm = VersionedXcm::from(xcm);
+		let para_id = ParaId::from(999);
+		let second_para_id = ParaId::from(1000);
+		let mut xcmp_message = Vec::new();
+		let formatted_msg = format_message(&mut xcmp_message, versioned_xcm.encode());
+		let messages = vec![
+			(para_id, 1u32.into(), formatted_msg),
+			(second_para_id, 1u32.into(), formatted_msg),
+		];
+
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+
+		let deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+		assert_eq!(
+			DeferredXcmMessages::<Test>::get(para_id),
+			create_bounded_vec(vec![deferred_message])
+		);
+		let second_deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: second_para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+		assert_eq!(
+			DeferredXcmMessages::<Test>::get(second_para_id),
+			create_bounded_vec(vec![second_deferred_message.clone()])
+		);
+
+		let QueueConfigData { xcmp_max_individual_weight, .. } = <QueueConfig<Test>>::get();
+		//Act
+		XcmpQueue::service_deferred_queues(low_max_weight, 7, xcmp_max_individual_weight);
+
+		//Assert
+		assert_eq!(DeferredXcmMessages::<Test>::get(para_id), create_bounded_vec(vec![]));
+		assert_eq!(
+			DeferredXcmMessages::<Test>::get(second_para_id),
+			create_bounded_vec(vec![second_deferred_message])
+		);
+	});
+}
+
+#[test]
+fn service_deferred_queues_should_stop_processing_when_weight_limit_is_reached_for_the_same_queue()
+{
+	new_test_ext().execute_with(|| {
+		//Arrange
+		use xcm_executor::traits::WeightBounds;
+		let mut xcm = Xcm::<RuntimeCall>(vec![Instruction::<RuntimeCall>::ReserveAssetDeposited(
+			MultiAssets::new(),
+		)]);
+		// We just set a very low max weight to stop processing deferred messages early
+		let db_weights: RuntimeDbWeight = <Test as frame_system::Config>::DbWeight::get();
+		let low_max_weight = FixedWeigher::weight(&mut xcm)
+			.unwrap()
+			.saturating_add(db_weights.reads_writes(1, 1));
+		let versioned_xcm = VersionedXcm::from(xcm);
+		let para_id = ParaId::from(999);
+		let mut xcmp_message = Vec::new();
+		let mut xcms = Vec::new();
+		xcms.extend(versioned_xcm.encode());
+		// We put the same message again, so that we can stop after the first one.
+		xcms.extend(versioned_xcm.encode());
+		let messages = vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, xcms))];
+
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+
+		let deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+		assert_eq!(
+			DeferredXcmMessages::<Test>::get(para_id),
+			create_bounded_vec(vec![deferred_message.clone(), deferred_message.clone()])
+		);
+
+		let QueueConfigData { xcmp_max_individual_weight, .. } = <QueueConfig<Test>>::get();
+		//Act
+		XcmpQueue::service_deferred_queues(low_max_weight, 7, xcmp_max_individual_weight);
+
+		//Assert
+		assert_eq!(
+			DeferredXcmMessages::<Test>::get(para_id),
+			create_bounded_vec(vec![deferred_message])
+		);
 	});
 }
 

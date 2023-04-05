@@ -323,7 +323,7 @@ pub mod pallet {
 		}
 
 		/// This extrinsic executes deferred messages up to the specified `weight_limit` and the current relay chain block number.
-		/// 
+		///
 		/// - `origin`: Must pass `ExecuteDeferredOrigin`.
 		/// - `weight_limit`: Maximum weight budget for deferred message execution.
 		//TODO: benchmark
@@ -332,7 +332,7 @@ pub mod pallet {
 		pub fn service_deferred(
 			origin: OriginFor<T>,
 			weight_limit: Weight,
-			para_id: ParaId
+			para_id: ParaId,
 		) -> DispatchResultWithPostInfo {
 			T::ExecuteDeferredOrigin::ensure_origin(origin)?;
 
@@ -1054,7 +1054,12 @@ impl<T: Config> Pallet<T> {
 
 				let (sent_at, format) = status[index].message_metadata[0];
 
-				let weight_used_for_queue = Self::service_deferred_queue(sender, weight_remaining, sent_at, xcmp_max_individual_weight);
+				let weight_used_for_queue = Self::service_deferred_queue(
+					sender,
+					weight_remaining,
+					sent_at,
+					xcmp_max_individual_weight,
+				);
 				let weight_remaining = weight_remaining.saturating_sub(weight_used_for_queue);
 
 				let (weight_processed, is_empty) = Self::process_xcmp_message(
@@ -1110,22 +1115,25 @@ impl<T: Config> Pallet<T> {
 	) -> Weight {
 		let mut weight_used = Weight::zero();
 		let mut unprocessed = Vec::new();
+		let mut drain_iter = DeferredXcmMessages::<T>::drain();
+		let mut processed_all_queues = false;
+		while !processed_all_queues && max_weight.all_gt(weight_used) {
+			weight_used = weight_used.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+			if let Some((sender, mut deferred_messages)) = drain_iter.next() {
+				weight_used = weight_used.saturating_add(Self::process_deferred_messages(
+					sender,
+					relay_chain_block_number,
+					&mut deferred_messages,
+					max_weight.saturating_sub(weight_used),
+					max_individual_weight,
+				));
 
-		//TODO: This is currently unbounded because `drain` will go through all storage items in the map
-		//      we want to be able to stop processing as soon as we hit the weight limit (or potentially if we hit
-		//      a message or number of queues limit).
-		for (sender, mut deferred_messages) in DeferredXcmMessages::<T>::drain() {
-			weight_used = weight_used.saturating_add(Self::process_deferred_messages(
-				sender,
-				relay_chain_block_number,
-				&mut deferred_messages,
-				max_weight.saturating_sub(weight_used),
-				max_individual_weight,
-			));
-
-			// store unprocessed messages after `drain` is done to avoid interfering with the iterator
-			if !deferred_messages.is_empty() {
-				unprocessed.push((sender, deferred_messages));
+				// store unprocessed messages after `drain` is done to avoid interfering with the iterator
+				if !deferred_messages.is_empty() {
+					unprocessed.push((sender, deferred_messages));
+				}
+			} else {
+				processed_all_queues = true;
 			}
 		}
 
