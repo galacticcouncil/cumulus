@@ -27,7 +27,7 @@ const MAX_INSTRUCTIONS: usize = 100;
 /// Maximum number of items we expect in a single `MultiAssets` value. Note this is not (yet)
 /// enforced, and just serves to provide a sensible upper bound for benchmarking.
 /// This value is copied from xcm/src/v3/multiasset.rs
-const MAX_ITEMS_IN_MULTIASSETS: usize = 20;
+const MAX_ITEMS_IN_MULTIASSETS: u32 = 20;
 
 benchmarks! {
 	set_config_with_u32 {}: update_resume_threshold(RawOrigin::Root, 100)
@@ -35,13 +35,14 @@ benchmarks! {
 	discard_deferred {
 		let para_id = ParaId::from(999);
 
-		let multi_assets = 	MultiAssets::from_sorted_and_deduplicated(vec![(MultiLocation::parent(), 100).into();MAX_ITEMS_IN_MULTIASSETS]).unwrap();
+		let assets = (0..MAX_ITEMS_IN_MULTIASSETS)
+			.map(|i| (MultiLocation::from(Parachain(i)), 100).into())
+			.collect::<Vec<_>>();
+		let multi_assets = 	MultiAssets::from_sorted_and_deduplicated(assets).unwrap();
 
-		let instructions = vec![Instruction::<T::RuntimeCall>::ReserveAssetDeposited(
-			multi_assets,
-		); MAX_INSTRUCTIONS];
+		let instructions = vec![Instruction::<T::RuntimeCall>::ReserveAssetDeposited(multi_assets); MAX_INSTRUCTIONS];
 
-		let xcm = 	VersionedXcm::from(Xcm::<T::RuntimeCall>(instructions));
+		let xcm = VersionedXcm::from(Xcm::<T::RuntimeCall>(instructions));
 		let hash = xcm.using_encoded(sp_io::hashing::blake2_256);
 
 		let sent_at = 1;
