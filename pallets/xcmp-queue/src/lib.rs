@@ -1154,7 +1154,7 @@ impl<T: Config> Pallet<T> {
 	) -> Weight {
 		let mut weight_used = Weight::zero();
 
-		let mut deferred_messages = DeferredXcmMessages::<T>::take(sender);
+		let mut deferred_messages = DeferredXcmMessages::<T>::get(sender);
 		weight_used = weight_used.saturating_add(Self::process_deferred_messages(
 			sender,
 			up_to_relay_block_number,
@@ -1163,7 +1163,9 @@ impl<T: Config> Pallet<T> {
 			max_individual_weight,
 		));
 
-		if !deferred_messages.is_empty() {
+		if deferred_messages.is_empty() {
+			DeferredXcmMessages::<T>::remove(sender);
+		} else {
 			DeferredXcmMessages::<T>::insert(sender, deferred_messages);
 		}
 

@@ -54,10 +54,16 @@ benchmarks! {
 		let deferred_xcm_messages = vec![deferred_message.clone(); max_messages];
 		crate::Pallet::<T>::inject_deferred_messages(para_id, deferred_xcm_messages.try_into().unwrap());
 		assert_eq!(crate::Pallet::<T>::deferred_messages(para_id).len(), max_messages);
-	} :_(RawOrigin::Root, Weight::MAX, para_id)
+		// TODO: figure out how to get the weight of the xcm in a production runtime (Weigher not available)
+		let weight = Weight::from_parts(1_000_000 - 1_000, 1024);
+		assert!(crate::Pallet::<T>::update_xcmp_max_individual_weight(RawOrigin::Root.into(), weight).is_ok());
+	} :_(RawOrigin::Root, weight, para_id)
 	verify
 	{
 		assert_eq!(crate::Pallet::<T>::deferred_messages(para_id).len(), 0);
+		assert!(Overweight::<T>::contains_key(0));
+		assert!(Overweight::<T>::contains_key((max_messages - 1) as u64));
+
 	}
 	discard_deferred {
 		let para_id = ParaId::from(999);
