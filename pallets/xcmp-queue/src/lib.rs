@@ -1261,9 +1261,7 @@ impl<T: Config> Pallet<T> {
 		sender: ParaId,
 		messages: BoundedVec<DeferredMessage<T::RuntimeCall>, T::MaxDeferredMessages>,
 	) {
-		DeferredXcmMessages::<T>::mutate(sender, |deferred_messages| {
-			*deferred_messages = messages
-		});
+		DeferredXcmMessages::<T>::mutate(sender, |deferred_messages| *deferred_messages = messages);
 	}
 }
 
