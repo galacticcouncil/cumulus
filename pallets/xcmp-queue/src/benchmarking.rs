@@ -63,7 +63,6 @@ benchmarks! {
 		assert_eq!(crate::Pallet::<T>::deferred_messages(para_id).len(), 0);
 		assert!(Overweight::<T>::contains_key(0));
 		assert!(Overweight::<T>::contains_key((max_messages - 1) as u64));
-
 	}
 	discard_deferred {
 		let para_id = ParaId::from(999);
