@@ -818,6 +818,7 @@ impl<T: Config> Pallet<T> {
 						if let Some(defer_by) =
 							T::XcmDeferFilter::deferred_by(sender, sent_at, &xcm)
 						{
+							// TODO: use current relay block for this instead of sent_at
 							let deferred_to = sent_at + defer_by;
 
 							let hash = xcm.using_encoded(sp_io::hashing::blake2_256);
