@@ -55,6 +55,7 @@ use rand_chacha::{
 };
 use scale_info::TypeInfo;
 use sp_core::bounded::BoundedVec;
+use sp_runtime::traits::BlockNumberProvider;
 use sp_runtime::RuntimeDebug;
 use sp_std::{convert::TryFrom, prelude::*};
 use xcm::{latest::prelude::*, VersionedXcm, WrapVersion, MAX_XCM_DECODE_DEPTH};
@@ -107,7 +108,6 @@ pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::BlockNumberProvider;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -818,8 +818,9 @@ impl<T: Config> Pallet<T> {
 						if let Some(defer_by) =
 							T::XcmDeferFilter::deferred_by(sender, sent_at, &xcm)
 						{
-							// TODO: use current relay block for this instead of sent_at
-							let deferred_to = sent_at + defer_by;
+							let relay_block =
+								T::RelayChainBlockNumberProvider::current_block_number();
+							let deferred_to = relay_block.saturating_add(defer_by);
 
 							let hash = xcm.using_encoded(sp_io::hashing::blake2_256);
 							let _ = DeferredXcmMessages::<T>::try_append(

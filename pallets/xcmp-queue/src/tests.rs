@@ -163,6 +163,7 @@ fn defer_xcm_execution_works() {
 		let messages =
 			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
 
+		RelayBlockNumberProviderMock::set(1);
 		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
 
 		let deferred_message = DeferredMessage {
@@ -199,6 +200,7 @@ fn handle_xcmp_messages_should_be_able_to_store_multiple_messages_at_same_block(
 		let messages =
 			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
 
+		RelayBlockNumberProviderMock::set(1);
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
 
@@ -235,6 +237,7 @@ fn handle_xcmp_messages_should_execute_deferred_message_and_remove_from_deferred
 		let messages =
 			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
 
+		RelayBlockNumberProviderMock::set(1);
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 
@@ -268,6 +271,7 @@ fn on_idle_should_service_deferred_message() {
 		let messages =
 			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
 
+		RelayBlockNumberProviderMock::set(1);
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 
 		let deferred_message = DeferredMessage {
@@ -281,6 +285,7 @@ fn on_idle_should_service_deferred_message() {
 			DeferredXcmMessages::<Test>::get(para_id),
 			create_bounded_vec(vec![deferred_message])
 		);
+		RelayBlockNumberProviderMock::set(7);
 
 		//Act
 		XcmpQueue::on_idle(1, Weight::MAX);
@@ -305,19 +310,21 @@ fn service_deferred_should_execute_deferred_messages() {
 			(para_id2, 2u32.into(), format_message(&mut xcmp_message2, versioned_xcm.encode())),
 		];
 
+		RelayBlockNumberProviderMock::set(2);
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 
 		let deferred_message = DeferredMessage {
 			sent_at: 1u32.into(),
 			sender: para_id,
 			xcm: versioned_xcm.clone(),
-			deferred_to: 6,
+			deferred_to: 7,
 		};
 
 		assert_eq!(
 			DeferredXcmMessages::<Test>::get(para_id),
 			create_bounded_vec(vec![deferred_message])
 		);
+		RelayBlockNumberProviderMock::set(7);
 
 		//Act
 		assert_ok!(XcmpQueue::service_deferred(RuntimeOrigin::root(), Weight::MAX, para_id));
@@ -352,6 +359,7 @@ fn service_deferred_should_fail_when_called_with_wrong_origin() {
 		let messages =
 			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
 
+		RelayBlockNumberProviderMock::set(1);
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 
 		let deferred_message = DeferredMessage {
@@ -392,6 +400,7 @@ fn service_deferred_queues_should_pass_overweight_messages_to_overweight_queue()
 		let messages =
 			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, encoded_xcm.clone()))];
 
+		RelayBlockNumberProviderMock::set(1);
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 
 		let deferred_message = DeferredMessage {
@@ -440,6 +449,7 @@ fn service_deferred_queues_should_stop_processing_when_weight_limit_is_reached_f
 			(second_para_id, 1u32.into(), formatted_msg),
 		];
 
+		RelayBlockNumberProviderMock::set(1);
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 
 		let deferred_message = DeferredMessage {
@@ -499,6 +509,7 @@ fn service_deferred_queues_should_stop_processing_when_weight_limit_is_reached_f
 		xcms.extend(versioned_xcm.encode());
 		let messages = vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, xcms))];
 
+		RelayBlockNumberProviderMock::set(1);
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 
 		let deferred_message = DeferredMessage {
@@ -539,6 +550,7 @@ fn discard_deferred_should_remove_message_from_storage() {
 		let mut xcmp_message = Vec::new();
 		let messages = vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, xcms))];
 
+		RelayBlockNumberProviderMock::set(1);
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 
 		let second_hash = second_versioned_xcm.using_encoded(sp_io::hashing::blake2_256);
@@ -549,6 +561,7 @@ fn discard_deferred_should_remove_message_from_storage() {
 		let mut second_xcmp_message = Vec::new();
 		let second_messages =
 			vec![(para_id, 2u32.into(), format_message(&mut second_xcmp_message, second_xcms))];
+		RelayBlockNumberProviderMock::set(2);
 		XcmpQueue::handle_xcmp_messages(second_messages.clone().into_iter(), Weight::MAX);
 
 		let deferred_message = DeferredMessage {
@@ -612,6 +625,7 @@ fn discard_deferred_should_remove_messages_when_only_required_params_specified()
 		let mut xcmp_message = Vec::new();
 		let messages = vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, xcms))];
 
+		RelayBlockNumberProviderMock::set(1);
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 
 		let mut second_xcmp_message = Vec::new();
@@ -620,6 +634,7 @@ fn discard_deferred_should_remove_messages_when_only_required_params_specified()
 			2u32.into(),
 			format_message(&mut second_xcmp_message, second_versioned_xcm.encode()),
 		)];
+		RelayBlockNumberProviderMock::set(2);
 		XcmpQueue::handle_xcmp_messages(second_messages.clone().into_iter(), Weight::MAX);
 
 		let deferred_message = DeferredMessage {
@@ -678,6 +693,7 @@ fn discard_deferred_should_remove_correct_messages_when_only_required_params_and
 		let mut xcmp_message = Vec::new();
 		let messages = vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, xcms))];
 
+		RelayBlockNumberProviderMock::set(1);
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 
 		let mut second_xcmp_message = Vec::new();
@@ -686,6 +702,7 @@ fn discard_deferred_should_remove_correct_messages_when_only_required_params_and
 			2u32.into(),
 			format_message(&mut second_xcmp_message, second_versioned_xcm.encode()),
 		)];
+		RelayBlockNumberProviderMock::set(2);
 		XcmpQueue::handle_xcmp_messages(second_messages.clone().into_iter(), Weight::MAX);
 
 		let deferred_message = DeferredMessage {
@@ -741,7 +758,9 @@ fn handle_xcmp_messages_should_execute_deferred_message_from_different_blocks() 
 		let messages = vec![(para_id, 1u32.into(), formatted_msg)];
 		let messages2 = vec![(para_id_2, 2u32.into(), formatted_msg)];
 
+		RelayBlockNumberProviderMock::set(1);
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+		RelayBlockNumberProviderMock::set(2);
 		XcmpQueue::handle_xcmp_messages(messages2.clone().into_iter(), Weight::MAX);
 
 		assert_eq!(
@@ -792,10 +811,12 @@ fn deferred_xcm_should_be_executed_and_removed_from_storage() {
 		let mut xcmp_message = Vec::new();
 		let formatted_msg = format_message(&mut xcmp_message, xcm.clone());
 		let messages = vec![(para_id, 1u32.into(), formatted_msg)];
+		RelayBlockNumberProviderMock::set(1);
 
 		//Act
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 		let messages = vec![(para_id, 6u32.into(), formatted_msg)];
+		RelayBlockNumberProviderMock::set(6);
 		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
 
 		//Assert
@@ -822,6 +843,7 @@ fn handle_xcmp_messages_should_both_defer_and_execute_xcm_message() {
 		message_format.extend(xcm.clone());
 		let messages = vec![(ParaId::from(999), 1u32.into(), message_format.as_slice())];
 		let messages2 = vec![(ParaId::from(1000), 7u32.into(), message_format.as_slice())];
+		RelayBlockNumberProviderMock::set(1);
 
 		//Act
 		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
@@ -835,7 +857,7 @@ fn handle_xcmp_messages_should_both_defer_and_execute_xcm_message() {
 			DeferredXcmMessages::<Test>::get(ParaId::from(999)),
 			create_bounded_vec(vec![expected_msg])
 		);
-
+		RelayBlockNumberProviderMock::set(7);
 		XcmpQueue::handle_xcmp_messages(messages2.into_iter(), Weight::MAX);
 
 		assert_eq!(DeferredXcmMessages::<Test>::get(ParaId::from(999)), create_bounded_vec(vec![]));

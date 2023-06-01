@@ -30,6 +30,7 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
+use sp_std::cell::RefCell;
 use xcm::prelude::*;
 use xcm_builder::{CurrencyAdapter, FixedWeightBounds, IsConcrete, NativeAsset, ParentIsPreset};
 use xcm_executor::traits::{ConvertOrigin, ShouldExecute};
@@ -251,13 +252,22 @@ impl Config for Test {
 	type RelayChainBlockNumberProvider = RelayBlockNumberProviderMock;
 }
 
+thread_local! {
+	pub static RELAY_BLOCK: RefCell<RelayBlockNumber> = RefCell::new(0);
+}
+
 pub struct RelayBlockNumberProviderMock;
+impl RelayBlockNumberProviderMock {
+	pub fn set(b: RelayBlockNumber) {
+		RELAY_BLOCK.with(|block| *block.borrow_mut() = b)
+	}
+}
 
 impl BlockNumberProvider for RelayBlockNumberProviderMock {
 	type BlockNumber = RelayBlockNumber;
 
 	fn current_block_number() -> RelayBlockNumber {
-		7
+		RELAY_BLOCK.with(|b| *b.borrow())
 	}
 }
 
