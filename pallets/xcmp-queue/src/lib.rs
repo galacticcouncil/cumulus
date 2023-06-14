@@ -326,9 +326,8 @@ pub mod pallet {
 		///
 		/// - `origin`: Must pass `ExecuteDeferredOrigin`.
 		/// - `weight_limit`: Maximum weight budget for deferred message execution.
-		//TODO: benchmark
 		#[pallet::call_index(9)]
-		#[pallet::weight((weight_limit.saturating_add(Weight::from_parts(1_000_000, 0)), DispatchClass::Operational))]
+		#[pallet::weight((weight_limit.saturating_add(T::WeightInfo::service_deferred()), DispatchClass::Operational))]
 		pub fn service_deferred(
 			origin: OriginFor<T>,
 			weight_limit: Weight,
@@ -358,9 +357,8 @@ pub mod pallet {
 		/// - `deferred_to`: The relay chain block number to which the deferred messages were deferred to execute
 		/// - `maybe_hash`: The hash of the deferred message
 		///
-		//TODO: benchmark
 		#[pallet::call_index(10)]
-		#[pallet::weight((Weight::from_parts(1_000_000, 0), DispatchClass::Operational))]
+		#[pallet::weight((T::WeightInfo::discard_deferred(), DispatchClass::Operational))]
 		pub fn discard_deferred(
 			origin: OriginFor<T>,
 			para_id: ParaId,
