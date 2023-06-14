@@ -50,7 +50,7 @@ benchmarks! {
 		let xcm = construct_xcm::<T::RuntimeCall>();
 
 		let max_messages = T::MaxDeferredMessages::get() as usize;
-		let deferred_message = DeferredMessage { sent_at: 1, deferred_to: 6, sender: para_id, xcm };
+		let deferred_message = DeferredMessage { sent_at: 0, deferred_to: 0, sender: para_id, xcm };
 		let deferred_xcm_messages = vec![deferred_message.clone(); max_messages];
 		crate::Pallet::<T>::inject_deferred_messages(para_id, deferred_xcm_messages.try_into().unwrap());
 		assert_eq!(crate::Pallet::<T>::deferred_messages(para_id).len(), max_messages);
