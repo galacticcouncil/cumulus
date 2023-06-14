@@ -90,7 +90,7 @@ pub trait XcmDeferFilter<TRuntimeCall> {
 		para: ParaId,
 		sent_at: RelayBlockNumber,
 		xcm: &VersionedXcm<TRuntimeCall>,
-	) -> Option<RelayBlockNumber>;
+	) -> (Weight, Option<RelayBlockNumber>);
 }
 
 impl<TRuntimeCall> XcmDeferFilter<TRuntimeCall> for () {
@@ -98,8 +98,8 @@ impl<TRuntimeCall> XcmDeferFilter<TRuntimeCall> for () {
 		_para: ParaId,
 		_sent_at: RelayBlockNumber,
 		_xcm: &VersionedXcm<TRuntimeCall>,
-	) -> Option<RelayBlockNumber> {
-		None
+	) -> (Weight, Option<RelayBlockNumber>) {
+		(Weight::default(), None)
 	}
 }
 
@@ -812,10 +812,11 @@ impl<T: Config> Pallet<T> {
 						MAX_XCM_DECODE_DEPTH,
 						&mut remaining_fragments,
 					) {
+						let (defer_weight, defer) =
+							T::XcmDeferFilter::deferred_by(sender, sent_at, &xcm);
+						weight_used += defer_weight;
 						let weight = max_weight.saturating_sub(weight_used);
-						if let Some(defer_by) =
-							T::XcmDeferFilter::deferred_by(sender, sent_at, &xcm)
-						{
+						if let Some(defer_by) = defer {
 							let relay_block =
 								T::RelayChainBlockNumberProvider::current_block_number();
 							let deferred_to = relay_block.saturating_add(defer_by);

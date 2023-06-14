@@ -220,14 +220,14 @@ impl XcmDeferFilter<RuntimeCall> for XcmDeferFilterMock {
 		_para: ParaId,
 		_sent_at: RelayBlockNumber,
 		xcm: &VersionedXcm<RuntimeCall>,
-	) -> Option<RelayBlockNumber> {
+	) -> (Weight, Option<RelayBlockNumber>) {
 		let xcm = Xcm::<RuntimeCall>::try_from(xcm.clone()).unwrap();
 		let first = xcm.first().unwrap();
 		match first {
-			ClearOrigin => Some(5),
-			ReserveAssetDeposited(_) => Some(5),
-			RefundSurplus => Some(42),
-			_ => Some(1_000_000),
+			ClearOrigin => (Weight::default(), Some(5)),
+			ReserveAssetDeposited(_) => (Weight::default(), Some(5)),
+			RefundSurplus => (Weight::default(), Some(42)),
+			_ => (Weight::default(), Some(1_000_000)),
 		}
 	}
 }
