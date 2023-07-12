@@ -156,6 +156,7 @@ fn suspend_xcm_execution_works() {
 #[test]
 fn defer_xcm_execution_works() {
 	new_test_ext().execute_with(|| {
+		//Arrange
 		let versioned_xcm = create_versioned_reserve_asset_deposited();
 		let hash = versioned_xcm.using_encoded(sp_io::hashing::blake2_256);
 		let para_id = ParaId::from(999);
@@ -163,9 +164,11 @@ fn defer_xcm_execution_works() {
 		let messages =
 			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
 
+		//Act
 		RelayBlockNumberProviderMock::set(1);
 		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
 
+		//Assert
 		let deferred_message = DeferredMessage {
 			sent_at: 1u32.into(),
 			sender: para_id,
@@ -193,6 +196,7 @@ fn defer_xcm_execution_works() {
 #[test]
 fn handle_xcmp_messages_should_be_able_to_store_multiple_messages_at_same_block() {
 	new_test_ext().execute_with(|| {
+		//Arrange
 		let versioned_xcm = create_versioned_reserve_asset_deposited();
 		let hash = versioned_xcm.using_encoded(sp_io::hashing::blake2_256);
 		let para_id = ParaId::from(999);
@@ -200,10 +204,12 @@ fn handle_xcmp_messages_should_be_able_to_store_multiple_messages_at_same_block(
 		let messages =
 			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
 
+		//Act
 		RelayBlockNumberProviderMock::set(1);
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
 
+		//Assert
 		let deferred_message = DeferredMessage {
 			sent_at: 1u32.into(),
 			sender: para_id,
@@ -231,16 +237,19 @@ fn handle_xcmp_messages_should_be_able_to_store_multiple_messages_at_same_block(
 #[test]
 fn handle_xcmp_messages_should_execute_deferred_message_and_remove_from_deferred_storage() {
 	new_test_ext().execute_with(|| {
+		//Arrange
 		let versioned_xcm = create_versioned_reserve_asset_deposited();
 		let para_id = ParaId::from(999);
 		let mut xcmp_message = Vec::new();
 		let messages =
 			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
 
+		//Act
 		RelayBlockNumberProviderMock::set(1);
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 
+		//Assert
 		let deferred_message = DeferredMessage {
 			sent_at: 1u32.into(),
 			sender: para_id,
@@ -310,9 +319,11 @@ fn service_deferred_should_execute_deferred_messages() {
 			(para_id2, 2u32.into(), format_message(&mut xcmp_message2, versioned_xcm.encode())),
 		];
 
+		//Act
 		RelayBlockNumberProviderMock::set(2);
 		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
 
+		//Assert
 		let deferred_message = DeferredMessage {
 			sent_at: 1u32.into(),
 			sender: para_id,
