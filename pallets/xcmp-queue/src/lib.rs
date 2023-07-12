@@ -1260,7 +1260,7 @@ impl<T: Config> Pallet<T> {
 		});
 	}
 
-	/// Add arbitrary deferred messages to the queue
+	/// Inject arbitrary deferred messages to the queue
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
 	fn inject_deferred_messages(
 		sender: ParaId,
