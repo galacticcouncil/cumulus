@@ -1111,7 +1111,7 @@ impl<T: Config> Pallet<T> {
 		weight_used
 	}
 
-	/// Process the deferred messages for all deferred queues up to the relay chain block number.
+	/// Process the deferred messages for all deferred queues up to the relay chain block number and max weight.
 	fn service_deferred_queues(
 		max_weight: Weight,
 		relay_chain_block_number: RelayBlockNumber,
@@ -1148,7 +1148,7 @@ impl<T: Config> Pallet<T> {
 		weight_used
 	}
 
-	/// Process the deferred messages for a single queue up to the relay chain block number.
+	/// Process the deferred messages for a single queue up to the relay chain block number and max weight.
 	fn service_deferred_queue(
 		sender: ParaId,
 		max_weight: Weight,
@@ -1260,7 +1260,7 @@ impl<T: Config> Pallet<T> {
 		});
 	}
 
-	/// Add arbitrary deferred messages to the queue
+	/// Inject arbitrary deferred messages to the queue
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
 	fn inject_deferred_messages(
 		sender: ParaId,
