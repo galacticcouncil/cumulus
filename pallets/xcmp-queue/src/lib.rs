@@ -467,7 +467,7 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// Inbound aggregate XCMP messages. It can only be one per ParaId.
+	/// Inbound aggregate XCMP messages per ParaId.
 	#[pallet::storage]
 	#[pallet::getter(fn deferred_messages)]
 	pub(super) type DeferredXcmMessages<T: Config> = StorageMap<
@@ -816,7 +816,7 @@ impl<T: Config> Pallet<T> {
 					) {
 						let (defer_weight, defer) =
 							T::XcmDeferFilter::deferred_by(sender, sent_at, &xcm);
-						weight_used += defer_weight;
+						weight_used.saturating_accrue(defer_weight);
 						let weight = max_weight.saturating_sub(weight_used);
 						if let Some(defer_by) = defer {
 							let relay_block =
