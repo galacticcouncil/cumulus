@@ -431,6 +431,8 @@ pub mod pallet {
 			deferred_to: RelayBlockNumber,
 			message_hash: Option<XcmHash>,
 		},
+
+		/// The deferred queue is full with xcm messages
 		XcmDeferredQueueFull {},
 	}
 
