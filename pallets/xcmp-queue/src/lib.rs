@@ -1148,7 +1148,7 @@ impl<T: Config> Pallet<T> {
 		weight_used
 	}
 
-	/// Process the deferred messages for a single queue up to the relay chain block number.
+	/// Process the deferred messages for a single queue up to the relay chain block number and max weight.
 	fn service_deferred_queue(
 		sender: ParaId,
 		max_weight: Weight,
