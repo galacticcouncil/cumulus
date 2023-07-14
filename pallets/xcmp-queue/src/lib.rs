@@ -433,7 +433,11 @@ pub mod pallet {
 		},
 
 		/// The deferred queue is full with xcm messages
-		XcmDeferredQueueFull {},
+		XcmDeferredQueueFull {
+			sender: ParaId,
+			sent_at: RelayBlockNumber,
+			message_hash: Option<XcmHash>,
+		},
 	}
 
 	#[pallet::error]
@@ -838,7 +842,12 @@ impl<T: Config> Pallet<T> {
 								Self::deposit_event(e);
 							})
 							.map_err(|()| {
-								Self::deposit_event(Event::XcmDeferredQueueFull {});
+								log::warn!("Deferred XCM queue full. Dropping message.");
+								Self::deposit_event(Event::XcmDeferredQueueFull {
+									sender,
+									sent_at,
+									message_hash: Some(hash),
+								});
 							});
 						} else {
 							*messages_processed += 1;
