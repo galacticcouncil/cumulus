@@ -361,6 +361,58 @@ fn service_deferred_should_execute_deferred_messages() {
 }
 
 #[test]
+fn service_deferred_should_store_unprocessed_messages() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let versioned_xcm = create_versioned_reserve_asset_deposited();
+		let hash = versioned_xcm.using_encoded(sp_io::hashing::blake2_256);
+		let para_id = ParaId::from(999);
+		let mut xcmp_message = Vec::new();
+		let messages =
+			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
+
+		//Act
+		RelayBlockNumberProviderMock::set(2);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+		RelayBlockNumberProviderMock::set(3);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+
+		//Assert
+		let msg_to_process = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 7,
+		};
+		let msg_not_to_process = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 8,
+		};
+
+		assert_eq!(
+			DeferredXcmMessages::<Test>::get(para_id),
+			create_bounded_vec(vec![msg_to_process, msg_not_to_process.clone()])
+		);
+		RelayBlockNumberProviderMock::set(7);
+
+		//Act
+		assert_ok!(XcmpQueue::service_deferred(RuntimeOrigin::root(), Weight::MAX, para_id));
+
+		//Assert
+		assert_eq!(
+			DeferredXcmMessages::<Test>::get(para_id),
+			create_bounded_vec(vec![msg_not_to_process])
+		);
+		assert_last_event::<Test>(
+			Event::Success { message_hash: Some(hash), weight: Weight::from_parts(1000000, 1024) }
+				.into(),
+		);
+	});
+}
+
+#[test]
 fn service_deferred_should_fail_when_called_with_wrong_origin() {
 	new_test_ext().execute_with(|| {
 		//Arrange
