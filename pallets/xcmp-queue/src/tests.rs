@@ -154,6 +154,42 @@ fn suspend_xcm_execution_works() {
 }
 
 #[test]
+fn suspend_also_suspends_deferred_execution() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let versioned_xcm = create_versioned_reserve_asset_deposited();
+		let para_id = ParaId::from(999);
+		let mut xcmp_message = Vec::new();
+		let messages =
+			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
+
+		RelayBlockNumberProviderMock::set(1);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+		let deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+		assert_eq!(
+			DeferredXcmMessages::<Test>::get(para_id),
+			create_bounded_vec(vec![deferred_message.clone()])
+		);
+
+		let QueueConfigData { xcmp_max_individual_weight, .. } = <QueueConfig<Test>>::get();
+
+		//Act
+		QueueSuspended::<Test>::put(true);
+		XcmpQueue::service_deferred_queues(Weight::MAX, 7, xcmp_max_individual_weight);
+
+		assert_eq!(
+			DeferredXcmMessages::<Test>::get(para_id),
+			create_bounded_vec(vec![deferred_message])
+		);
+	});
+}
+
+#[test]
 fn defer_xcm_execution_works() {
 	new_test_ext().execute_with(|| {
 		//Arrange

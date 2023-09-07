@@ -390,28 +390,15 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Some XCM was executed ok.
-		Success {
-			message_hash: Option<XcmHash>,
-			weight: Weight,
-		},
+		Success { message_hash: Option<XcmHash>, weight: Weight },
 		/// Some XCM failed.
-		Fail {
-			message_hash: Option<XcmHash>,
-			error: XcmError,
-			weight: Weight,
-		},
+		Fail { message_hash: Option<XcmHash>, error: XcmError, weight: Weight },
 		/// Bad XCM version used.
-		BadVersion {
-			message_hash: Option<XcmHash>,
-		},
+		BadVersion { message_hash: Option<XcmHash> },
 		/// Bad XCM format used.
-		BadFormat {
-			message_hash: Option<XcmHash>,
-		},
+		BadFormat { message_hash: Option<XcmHash> },
 		/// An HRMP message was sent to a sibling parachain.
-		XcmpMessageSent {
-			message_hash: Option<XcmHash>,
-		},
+		XcmpMessageSent { message_hash: Option<XcmHash> },
 		/// An XCM exceeded the individual message weight budget.
 		OverweightEnqueued {
 			sender: ParaId,
@@ -420,10 +407,7 @@ pub mod pallet {
 			required: Weight,
 		},
 		/// An XCM from the overweight queue was executed with the given actual weight used.
-		OverweightServiced {
-			index: OverweightIndex,
-			used: Weight,
-		},
+		OverweightServiced { index: OverweightIndex, used: Weight },
 		/// Some XCM was deferred for later execution
 		XcmDeferred {
 			sender: ParaId,
@@ -1127,6 +1111,9 @@ impl<T: Config> Pallet<T> {
 		max_individual_weight: Weight,
 	) -> Weight {
 		let mut weight_used = Weight::zero();
+		if QueueSuspended::<T>::get() {
+			return weight_used;
+		}
 		let mut unprocessed = Vec::new();
 		let mut drain_iter = DeferredXcmMessages::<T>::drain();
 		let mut processed_all_queues = false;
@@ -1165,6 +1152,9 @@ impl<T: Config> Pallet<T> {
 		max_individual_weight: Weight,
 	) -> Weight {
 		let mut weight_used = Weight::zero();
+		if QueueSuspended::<T>::get() {
+			return weight_used;
+		}
 
 		let mut deferred_messages = DeferredXcmMessages::<T>::get(sender);
 		weight_used = weight_used.saturating_add(Self::process_deferred_messages(
