@@ -234,6 +234,7 @@ impl XcmDeferFilter<RuntimeCall> for XcmDeferFilterMock {
 
 parameter_types! {
 	pub const MaxDeferredMessages: u32 = 20;
+	pub const MaxDeferredBuckets: u32 = 10;
 }
 
 impl Config for Test {
@@ -249,6 +250,7 @@ impl Config for Test {
 	type PriceForSiblingDelivery = ();
 	type XcmDeferFilter = XcmDeferFilterMock;
 	type MaxDeferredMessages = MaxDeferredMessages;
+	type MaxDeferredBuckets = MaxDeferredBuckets;
 	type RelayChainBlockNumberProvider = RelayBlockNumberProviderMock;
 }
 
@@ -293,8 +295,19 @@ pub fn format_message(msg: &mut Vec<u8>, encoded_xcm: Vec<u8>) -> &[u8] {
 	msg
 }
 
-pub fn create_bounded_vec(
-	deferred_xcm_messages: Vec<DeferredMessage<RuntimeCall>>,
-) -> BoundedVec<DeferredMessage<RuntimeCall>, MaxDeferredMessages> {
+pub fn create_bounded_vec<T>(deferred_xcm_messages: Vec<T>) -> BoundedVec<T, MaxDeferredMessages>
+where
+	T: core::fmt::Debug,
+{
 	deferred_xcm_messages.try_into().unwrap()
+}
+
+use sp_std::collections::btree_set::BTreeSet;
+pub fn create_bounded_btreeset<I>(
+	iter: I,
+) -> BoundedBTreeSet<(RelayBlockNumber, u16), MaxDeferredBuckets>
+where
+	I: Iterator<Item = (RelayBlockNumber, u16)>,
+{
+	BTreeSet::from_iter(iter).try_into().unwrap()
 }

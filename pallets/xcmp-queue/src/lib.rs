@@ -36,6 +36,9 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 pub mod weights;
+use core::ops::Sub;
+
+use frame_support::traits::Defensive;
 pub use weights::WeightInfo;
 
 use codec::{Decode, DecodeLimit, Encode};
@@ -54,9 +57,11 @@ use rand_chacha::{
 	ChaChaRng,
 };
 use scale_info::TypeInfo;
-use sp_core::bounded::BoundedVec;
+use sp_core::bounded::{BoundedBTreeSet, BoundedVec};
 use sp_runtime::traits::BlockNumberProvider;
 use sp_runtime::RuntimeDebug;
+use sp_std::collections::btree_set::BTreeSet;
+use sp_std::ops::Bound::Included;
 use sp_std::{convert::TryFrom, prelude::*};
 use xcm::{latest::prelude::*, VersionedXcm, WrapVersion, MAX_XCM_DECODE_DEPTH};
 use xcm_executor::traits::ConvertOrigin;
@@ -83,6 +88,8 @@ const MAX_MESSAGES_PER_BLOCK: u8 = 10;
 // Maximum amount of messages that can exist in the overweight queue at any given time.
 const MAX_OVERWEIGHT_MESSAGES: u32 = 1000;
 
+pub type DeferredIndex = (RelayBlockNumber, u16);
+
 /// Determine whether to execute incoming messages directly or defer them by a certain amount
 /// of relay chain blocks.
 pub trait XcmDeferFilter<TRuntimeCall> {
@@ -106,7 +113,7 @@ impl<TRuntimeCall> XcmDeferFilter<TRuntimeCall> for () {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, Blake2_128Concat};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -147,8 +154,11 @@ pub mod pallet {
 		/// Filter logic to defer XCM message
 		type XcmDeferFilter: XcmDeferFilter<Self::RuntimeCall>;
 
-		/// The maximum number of messages allowed in the deferred queue.
+		/// The maximum number of messages allowed in one bucket.
 		type MaxDeferredMessages: Get<u32>;
+
+		/// The maximum number of deferred message buckets.
+		type MaxDeferredBuckets: Get<u32>;
 
 		/// Relay chain block number provider to allow processing deferred messages on idle
 		type RelayChainBlockNumberProvider: BlockNumberProvider<BlockNumber = RelayBlockNumber>;
@@ -326,6 +336,7 @@ pub mod pallet {
 		///
 		/// - `origin`: Must pass `ExecuteDeferredOrigin`.
 		/// - `weight_limit`: Maximum weight budget for deferred message execution.
+		/// - `para_id`: The queue to service.
 		#[pallet::call_index(9)]
 		#[pallet::weight((weight_limit.saturating_add(T::WeightInfo::service_deferred()), DispatchClass::Operational))]
 		pub fn service_deferred(
@@ -349,40 +360,60 @@ pub mod pallet {
 
 		/// This extrinsic discards all deferred messages that match the given parameters.
 		///
-		/// Parameters set to `None` are not matched.
-		///
 		/// - `origin`: Must pass `ExecuteDeferredOrigin`
 		/// - `para_id`: The parachain id where the deferred messages were sent from
-		/// - `sent_at`: The relay chain block number at which the deferred messages were sent
-		/// - `deferred_to`: The relay chain block number to which the deferred messages were deferred to execute
-		/// - `maybe_hash`: The hash of the deferred message
-		///
-		#[pallet::call_index(10)]
+		/// - `index`: The relay chain block number to which the messages were deferred as well as the bucket index.
+		/// - `maybe_position`: The position in the bucket of the message to be discarded. Will discard the whole bucket
+		///     if `None`.
+		#[pallet::call_index(11)]
 		#[pallet::weight((T::WeightInfo::discard_deferred(), DispatchClass::Operational))]
 		pub fn discard_deferred(
 			origin: OriginFor<T>,
 			para_id: ParaId,
-			sent_at: RelayBlockNumber,
-			deferred_to: Option<RelayBlockNumber>,
-			maybe_hash: Option<XcmHash>,
-		) -> DispatchResultWithPostInfo {
+			index: DeferredIndex,
+			maybe_position: Option<u32>,
+		) -> DispatchResult {
 			T::ExecuteDeferredOrigin::ensure_origin(origin)?;
 
-			DeferredXcmMessages::<T>::mutate_exists(para_id, |deferred| {
-				deferred.as_mut().map(|d| {
-					d.retain(|msg| {
-						// We discard all messages that match the given parameters.
-						!(msg.sent_at == sent_at
-							&& (deferred_to.is_none() || Some(msg.deferred_to) == deferred_to)
-							&& (maybe_hash.is_none() || {
-								let hash = msg.xcm.using_encoded(sp_io::hashing::blake2_256);
-								Some(hash) == maybe_hash
-							}))
-					})
-				});
-			});
-
-			Ok(Some(Weight::from_parts(1_000_000, 0)).into())
+			DeferredMessageBuckets::<T>::mutate_exists(para_id, index, |deferred| {
+				if let Some(position) = maybe_position {
+					deferred
+						.as_mut()
+						.map(
+							|d: &mut BoundedVec<
+								Option<DeferredMessage<<T as frame_system::Config>::RuntimeCall>>,
+								<T as Config>::MaxDeferredMessages,
+							>| {
+								d.get_mut(position as usize)
+									.map(|maybe_msg| {
+										if let Some(msg) = maybe_msg {
+											let hash =
+												msg.xcm.using_encoded(sp_io::hashing::blake2_256);
+											Self::deposit_event(Event::DeferredXcmDiscarded {
+												sender: para_id,
+												sent_at: msg.sent_at,
+												deferred_to: msg.deferred_to,
+												index,
+												position,
+												message_hash: Some(hash),
+											});
+											*maybe_msg = None;
+											Ok(())
+										} else {
+											Err(Error::<T>::MessageNotFound)
+										}
+									})
+									.unwrap_or(Err(Error::<T>::MessageNotFound))
+							},
+						)
+						.unwrap_or(Err(Error::<T>::MessageNotFound))
+				} else {
+					*deferred = None;
+					Self::deposit_event(Event::DeferredBucketDiscarded { sender: para_id, index });
+					Ok(())
+				}
+			})?;
+			Ok(())
 		}
 	}
 
@@ -390,15 +421,28 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Some XCM was executed ok.
-		Success { message_hash: Option<XcmHash>, weight: Weight },
+		Success {
+			message_hash: Option<XcmHash>,
+			weight: Weight,
+		},
 		/// Some XCM failed.
-		Fail { message_hash: Option<XcmHash>, error: XcmError, weight: Weight },
+		Fail {
+			message_hash: Option<XcmHash>,
+			error: XcmError,
+			weight: Weight,
+		},
 		/// Bad XCM version used.
-		BadVersion { message_hash: Option<XcmHash> },
+		BadVersion {
+			message_hash: Option<XcmHash>,
+		},
 		/// Bad XCM format used.
-		BadFormat { message_hash: Option<XcmHash> },
+		BadFormat {
+			message_hash: Option<XcmHash>,
+		},
 		/// An HRMP message was sent to a sibling parachain.
-		XcmpMessageSent { message_hash: Option<XcmHash> },
+		XcmpMessageSent {
+			message_hash: Option<XcmHash>,
+		},
 		/// An XCM exceeded the individual message weight budget.
 		OverweightEnqueued {
 			sender: ParaId,
@@ -407,20 +451,36 @@ pub mod pallet {
 			required: Weight,
 		},
 		/// An XCM from the overweight queue was executed with the given actual weight used.
-		OverweightServiced { index: OverweightIndex, used: Weight },
+		OverweightServiced {
+			index: OverweightIndex,
+			used: Weight,
+		},
 		/// Some XCM was deferred for later execution
 		XcmDeferred {
 			sender: ParaId,
 			sent_at: RelayBlockNumber,
 			deferred_to: RelayBlockNumber,
+			index: DeferredIndex,
+			position: u32,
 			message_hash: Option<XcmHash>,
 		},
-
 		/// The deferred queue is full with xcm messages
 		XcmDeferredQueueFull {
 			sender: ParaId,
 			sent_at: RelayBlockNumber,
 			message_hash: Option<XcmHash>,
+		},
+		DeferredXcmDiscarded {
+			sender: ParaId,
+			sent_at: RelayBlockNumber,
+			deferred_to: RelayBlockNumber,
+			index: DeferredIndex,
+			position: u32,
+			message_hash: Option<XcmHash>,
+		},
+		DeferredBucketDiscarded {
+			sender: ParaId,
+			index: DeferredIndex,
 		},
 	}
 
@@ -436,6 +496,8 @@ pub mod pallet {
 		BadOverweightIndex,
 		/// Provided weight is possibly not enough to execute the message.
 		WeightOverLimit,
+		/// Indicated message is not present.
+		MessageNotFound,
 	}
 
 	/// Status of the inbound XCMP channels.
@@ -456,13 +518,35 @@ pub mod pallet {
 	>;
 
 	/// Inbound aggregate XCMP messages per ParaId.
+	// #[pallet::storage]
+	// #[pallet::getter(fn deferred_messages)]
+	// pub(super) type DeferredXcmMessages<T: Config> = StorageMap<
+	// 	_,
+	// 	Blake2_128Concat,
+	// 	ParaId,
+	// 	BoundedVec<DeferredMessage<T::RuntimeCall>, T::MaxDeferredMessages>,
+	// 	ValueQuery,
+	// >;
+
 	#[pallet::storage]
-	#[pallet::getter(fn deferred_messages)]
-	pub(super) type DeferredXcmMessages<T: Config> = StorageMap<
+	#[pallet::getter(fn deferred_indices)]
+	pub(super) type DeferredIndices<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
 		ParaId,
-		BoundedVec<DeferredMessage<T::RuntimeCall>, T::MaxDeferredMessages>,
+		BoundedBTreeSet<DeferredIndex, T::MaxDeferredBuckets>,
+		ValueQuery,
+	>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn messages_deferred_to)]
+	pub(super) type DeferredMessageBuckets<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		ParaId,
+		Blake2_128Concat,
+		DeferredIndex,
+		BoundedVec<Option<DeferredMessage<T::RuntimeCall>>, T::MaxDeferredMessages>,
 		ValueQuery,
 	>;
 
@@ -812,15 +896,18 @@ impl<T: Config> Pallet<T> {
 							let deferred_to = relay_block.saturating_add(defer_by);
 
 							let hash = xcm.using_encoded(sp_io::hashing::blake2_256);
-							let _ = DeferredXcmMessages::<T>::try_append(
+							let _ = Self::try_place_in_deferred_queue(
 								sender,
+								deferred_to,
 								DeferredMessage { sender, xcm, sent_at, deferred_to },
 							)
-							.map(|()| {
+							.map(|(index, position)| {
 								let e = Event::XcmDeferred {
 									sender,
 									sent_at,
 									deferred_to,
+									index,
+									position,
 									message_hash: Some(hash),
 								};
 								Self::deposit_event(e);
@@ -1114,31 +1201,19 @@ impl<T: Config> Pallet<T> {
 		if QueueSuspended::<T>::get() {
 			return weight_used;
 		}
-		let mut unprocessed = Vec::new();
-		let mut drain_iter = DeferredXcmMessages::<T>::drain();
+		let mut keys = DeferredIndices::<T>::iter_keys();
 		let mut processed_all_queues = false;
 		while !processed_all_queues && max_weight.all_gt(weight_used) {
-			weight_used = weight_used.saturating_add(T::DbWeight::get().reads_writes(1, 1));
-			if let Some((sender, mut deferred_messages)) = drain_iter.next() {
-				weight_used = weight_used.saturating_add(Self::process_deferred_messages(
+			if let Some(sender) = keys.next() {
+				weight_used.saturating_accrue(Self::service_deferred_queue(
 					sender,
-					relay_chain_block_number,
-					&mut deferred_messages,
 					max_weight.saturating_sub(weight_used),
+					relay_chain_block_number,
 					max_individual_weight,
 				));
-
-				// store unprocessed messages after `drain` is done to avoid interfering with the iterator
-				if !deferred_messages.is_empty() {
-					unprocessed.push((sender, deferred_messages));
-				}
 			} else {
 				processed_all_queues = true;
 			}
-		}
-
-		for (sender, new_deferred_messages) in unprocessed {
-			DeferredXcmMessages::<T>::insert(sender, new_deferred_messages);
 		}
 
 		weight_used
@@ -1156,47 +1231,105 @@ impl<T: Config> Pallet<T> {
 			return weight_used;
 		}
 
-		let mut deferred_messages = DeferredXcmMessages::<T>::get(sender);
-		weight_used = weight_used.saturating_add(Self::process_deferred_messages(
-			sender,
-			up_to_relay_block_number,
-			&mut deferred_messages,
-			max_weight.saturating_sub(weight_used),
-			max_individual_weight,
-		));
+		weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
+		let mut indices = DeferredIndices::<T>::take(sender);
 
-		if deferred_messages.is_empty() {
-			DeferredXcmMessages::<T>::remove(sender);
-		} else {
-			DeferredXcmMessages::<T>::insert(sender, deferred_messages);
+		let indices_to_process =
+			indices.range((Included(&(0, 0)), Included(&(up_to_relay_block_number, u16::MAX))));
+		let mut processed = BTreeSet::new();
+		for index in indices_to_process {
+			weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
+			if weight_used.any_gte(max_weight) {
+				break;
+			}
+			let remove = DeferredMessageBuckets::<T>::mutate(sender, index, |bucket| {
+				weight_used.saturating_accrue(Self::process_deferred_messages(
+					sender,
+					bucket,
+					max_weight.saturating_sub(weight_used),
+					max_individual_weight,
+				));
+				bucket.iter().all(|maybe_msg| maybe_msg.is_none())
+			});
+			if remove {
+				DeferredMessageBuckets::<T>::remove(sender, index);
+				processed.insert(*index);
+			}
+		}
+		indices = BoundedBTreeSet::try_from(indices.into_inner().sub(&processed))
+			.expect("Subtraction can only lead to a smaller set. qed.");
+		if !indices.is_empty() {
+			DeferredIndices::<T>::insert(sender, indices);
 		}
 
 		weight_used
+	}
+
+	fn try_place_in_deferred_queue(
+		sender: ParaId,
+		deferred_to: RelayBlockNumber,
+		deferred_message: DeferredMessage<T::RuntimeCall>,
+	) -> Result<(DeferredIndex, u32), ()> {
+		DeferredIndices::<T>::try_mutate(sender, |indices| {
+			let first_index_in_block = (deferred_to, 0_u16);
+			let (index, do_insert) = indices
+				.range((Included(&first_index_in_block), Included(&(deferred_to, u16::MAX))))
+				.max()
+				.map(|index| (*index, false))
+				.unwrap_or((first_index_in_block, true));
+			if do_insert {
+				// no bucket yet for block `deferred_to`, create new one
+				indices.try_insert(index).map_err(|_| ())?;
+			}
+			let deferred_message = Some(deferred_message);
+			let position =
+				DeferredMessageBuckets::<T>::decode_len(sender, index).unwrap_or(0) as u32;
+			let index_and_pos = if DeferredMessageBuckets::<T>::try_append(
+				sender,
+				index,
+				&deferred_message,
+			)
+			.is_ok()
+			{
+				(index, position)
+			} else {
+				// last bucket is full, create new one
+				let (deferred_to, block_index) = index;
+				let new_index = (deferred_to, block_index.checked_add(1).ok_or(())?);
+				indices.try_insert(new_index).map_err(|_| ())?;
+				let _ =
+					DeferredMessageBuckets::<T>::try_append(sender, new_index, &deferred_message)
+						.defensive_proof("appending to empty bucket should not fail");
+				(new_index, 0)
+			};
+			Ok(index_and_pos)
+		})
 	}
 
 	/// Process `deferred_messages` from `sender` that were deferred until `relay_chain_block`
 	/// Returns the `weight_used` and removes processed messages from the `deferred_messages` vector.
 	fn process_deferred_messages(
 		sender: ParaId,
-		relay_chain_block: RelayBlockNumber,
-		deferred_messages: &mut BoundedVec<DeferredMessage<T::RuntimeCall>, T::MaxDeferredMessages>,
+		deferred_messages: &mut BoundedVec<
+			Option<DeferredMessage<T::RuntimeCall>>,
+			T::MaxDeferredMessages,
+		>,
 		max_weight: Weight,
 		max_individual_weight: Weight,
 	) -> Weight {
 		let mut weight_used = Weight::zero();
 
-		deferred_messages.retain(|msg| {
-			if msg.deferred_to > relay_chain_block {
-				return true;
+		for maybe_msg in deferred_messages.iter_mut() {
+			let weight = max_weight.saturating_sub(weight_used);
+			if weight.any_eq(Weight::zero()) {
+				break;
 			}
 
-			let weight = max_weight.saturating_sub(weight_used);
-			//TODO: consider doing early out when there is no weight left
-
+			let Some(msg) = maybe_msg else { continue };
 			match Self::handle_xcm_message(sender, msg.sent_at, msg.xcm.clone(), weight) {
 				Ok(used) => {
-					weight_used = weight_used.saturating_add(used);
-					return false;
+					weight_used.saturating_accrue(used);
+					*maybe_msg = None;
 				},
 				Err(XcmError::WeightLimitReached(required))
 					if required.any_gt(max_individual_weight) =>
@@ -1216,14 +1349,12 @@ impl<T: Config> Pallet<T> {
 						};
 						Self::deposit_event(e);
 					}
-					return false;
+					*maybe_msg = None;
 				},
-				Err(XcmError::WeightLimitReached(_)) => {
-					return true;
-				},
-				Err(_) => return false,
+				Err(XcmError::WeightLimitReached(_)) => {},
+				Err(_) => *maybe_msg = None,
 			}
-		});
+		}
 
 		weight_used
 	}
@@ -1263,9 +1394,18 @@ impl<T: Config> Pallet<T> {
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
 	fn inject_deferred_messages(
 		sender: ParaId,
+		deferred_to: RelayBlockNumber,
 		messages: BoundedVec<DeferredMessage<T::RuntimeCall>, T::MaxDeferredMessages>,
 	) {
-		DeferredXcmMessages::<T>::mutate(sender, |deferred_messages| *deferred_messages = messages);
+		let index = (deferred_to, 0);
+		DeferredIndices::<T>::mutate(sender, |indices| {
+			indices.try_insert(index).expect("Should not inject too many messages.");
+		});
+		let messages: Vec<_> = messages.into_iter().map(|msg| Some(msg)).collect();
+		let messages = BoundedVec::try_from(messages).expect("Length was not changed. qed.");
+		DeferredMessageBuckets::<T>::mutate(sender, index, |deferred_messages| {
+			*deferred_messages = messages
+		});
 	}
 }
 

@@ -53,20 +53,22 @@ benchmarks! {
 		let relay_block = T::RelayChainBlockNumberProvider::current_block_number();
 		// We set `deferred_to` to the current relay block number to make sure that the messages are serviced.
 		let deferred_message = DeferredMessage { sent_at: relay_block, deferred_to: relay_block, sender: para_id, xcm };
+		// TODO: inject more messages. How many?
 		let deferred_xcm_messages = vec![deferred_message.clone(); max_messages];
-		crate::Pallet::<T>::inject_deferred_messages(para_id, deferred_xcm_messages.try_into().unwrap());
-		assert_eq!(crate::Pallet::<T>::deferred_messages(para_id).len(), max_messages);
+		crate::Pallet::<T>::inject_deferred_messages(para_id, relay_block, deferred_xcm_messages.try_into().unwrap());
+		assert_eq!(crate::Pallet::<T>::messages_deferred_to(para_id, (relay_block, 0)).len(), max_messages);
 		// TODO: figure out how to get the weight of the xcm in a production runtime (Weigher not available)
 		let weight = Weight::from_parts(1_000_000 - 1_000, 1024);
 		assert!(crate::Pallet::<T>::update_xcmp_max_individual_weight(RawOrigin::Root.into(), weight).is_ok());
-	} :_(RawOrigin::Root, weight, para_id)
+	} :_(RawOrigin::Root, weight.saturating_add(T::DbWeight::get().reads_writes(max_messages as u64 + 2, 2)), para_id)
 	verify
 	{
-		assert_eq!(crate::Pallet::<T>::deferred_messages(para_id).len(), 0);
+		assert_eq!(crate::Pallet::<T>::messages_deferred_to(para_id, (relay_block, 0)).len(), 0);
+		// worst case is placing the message in overweight, so check that they end up there
 		assert!(Overweight::<T>::contains_key(0));
 		assert!(Overweight::<T>::contains_key((max_messages - 1) as u64));
 	}
-	discard_deferred {
+	discard_deferred_bucket {
 		let para_id = ParaId::from(999);
 
 		let xcm = construct_xcm::<T::RuntimeCall>();
@@ -77,12 +79,32 @@ benchmarks! {
 		let max_messages = T::MaxDeferredMessages::get() as usize;
 		let deferred_message = DeferredMessage { sent_at, deferred_to, sender: para_id, xcm };
 		let deferred_xcm_messages = vec![deferred_message.clone(); max_messages];
-		crate::Pallet::<T>::inject_deferred_messages(para_id, deferred_xcm_messages.try_into().unwrap());
-		assert_eq!(crate::Pallet::<T>::deferred_messages(para_id).len(), max_messages);
-	} :_(RawOrigin::Root, para_id, sent_at, Some(deferred_to), Some(hash))
+		crate::Pallet::<T>::inject_deferred_messages(para_id, deferred_to, deferred_xcm_messages.try_into().unwrap());
+		assert_eq!(crate::Pallet::<T>::messages_deferred_to(para_id, (deferred_to, 0)).len(), max_messages);
+	} :discard_deferred(RawOrigin::Root, para_id, (deferred_to, 0), None)
 	verify
 	{
-		assert_eq!(crate::Pallet::<T>::deferred_messages(para_id).len(), 0);
+		assert_eq!(crate::Pallet::<T>::messages_deferred_to(para_id, (deferred_to, 0)).len(), 0);
+	}
+	discard_deferred_individual {
+		let para_id = ParaId::from(999);
+
+		let xcm = construct_xcm::<T::RuntimeCall>();
+		let hash = xcm.using_encoded(sp_io::hashing::blake2_256);
+
+		let sent_at = 1;
+		let deferred_to = 6;
+		let max_messages = T::MaxDeferredMessages::get() as usize;
+		let deferred_message = DeferredMessage { sent_at, deferred_to, sender: para_id, xcm };
+		let deferred_xcm_messages = vec![deferred_message.clone(); max_messages];
+		crate::Pallet::<T>::inject_deferred_messages(para_id, deferred_to, deferred_xcm_messages.try_into().unwrap());
+		assert_eq!(crate::Pallet::<T>::messages_deferred_to(para_id, (deferred_to, 0)).len(), max_messages);
+	} :discard_deferred(RawOrigin::Root, para_id, (deferred_to, 0), Some(max_messages as u32 - 1))
+	verify
+	{
+		let messages = crate::Pallet::<T>::messages_deferred_to(para_id, (deferred_to, 0));
+		assert_eq!(messages.len(), max_messages);
+		assert_eq!(messages[max_messages - 1], None);
 	}
 }
 
