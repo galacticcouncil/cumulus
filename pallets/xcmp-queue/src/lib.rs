@@ -88,6 +88,7 @@ const MAX_MESSAGES_PER_BLOCK: u8 = 10;
 // Maximum amount of messages that can exist in the overweight queue at any given time.
 const MAX_OVERWEIGHT_MESSAGES: u32 = 1000;
 
+/// Type used to store deferred message buckets.
 pub type DeferredIndex = (RelayBlockNumber, u16);
 
 /// Determine whether to execute incoming messages directly or defer them by a certain amount
@@ -157,7 +158,7 @@ pub mod pallet {
 		/// The maximum number of messages allowed in one bucket.
 		type MaxDeferredMessages: Get<u32>;
 
-		/// The maximum number of deferred message buckets.
+		/// The maximum number of deferred message buckets per parachain.
 		type MaxDeferredBuckets: Get<u32>;
 
 		/// Relay chain block number provider to allow processing deferred messages on idle
@@ -421,28 +422,15 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Some XCM was executed ok.
-		Success {
-			message_hash: Option<XcmHash>,
-			weight: Weight,
-		},
+		Success { message_hash: Option<XcmHash>, weight: Weight },
 		/// Some XCM failed.
-		Fail {
-			message_hash: Option<XcmHash>,
-			error: XcmError,
-			weight: Weight,
-		},
+		Fail { message_hash: Option<XcmHash>, error: XcmError, weight: Weight },
 		/// Bad XCM version used.
-		BadVersion {
-			message_hash: Option<XcmHash>,
-		},
+		BadVersion { message_hash: Option<XcmHash> },
 		/// Bad XCM format used.
-		BadFormat {
-			message_hash: Option<XcmHash>,
-		},
+		BadFormat { message_hash: Option<XcmHash> },
 		/// An HRMP message was sent to a sibling parachain.
-		XcmpMessageSent {
-			message_hash: Option<XcmHash>,
-		},
+		XcmpMessageSent { message_hash: Option<XcmHash> },
 		/// An XCM exceeded the individual message weight budget.
 		OverweightEnqueued {
 			sender: ParaId,
@@ -451,10 +439,7 @@ pub mod pallet {
 			required: Weight,
 		},
 		/// An XCM from the overweight queue was executed with the given actual weight used.
-		OverweightServiced {
-			index: OverweightIndex,
-			used: Weight,
-		},
+		OverweightServiced { index: OverweightIndex, used: Weight },
 		/// Some XCM was deferred for later execution
 		XcmDeferred {
 			sender: ParaId,
@@ -470,6 +455,7 @@ pub mod pallet {
 			sent_at: RelayBlockNumber,
 			message_hash: Option<XcmHash>,
 		},
+		/// The deferred message was successfully discarded.
 		DeferredXcmDiscarded {
 			sender: ParaId,
 			sent_at: RelayBlockNumber,
@@ -478,10 +464,8 @@ pub mod pallet {
 			position: u32,
 			message_hash: Option<XcmHash>,
 		},
-		DeferredBucketDiscarded {
-			sender: ParaId,
-			index: DeferredIndex,
-		},
+		/// The deferred bucket was discarded.
+		DeferredBucketDiscarded { sender: ParaId, index: DeferredIndex },
 	}
 
 	#[pallet::error]
@@ -516,17 +500,6 @@ pub mod pallet {
 		Vec<u8>,
 		ValueQuery,
 	>;
-
-	/// Inbound aggregate XCMP messages per ParaId.
-	// #[pallet::storage]
-	// #[pallet::getter(fn deferred_messages)]
-	// pub(super) type DeferredXcmMessages<T: Config> = StorageMap<
-	// 	_,
-	// 	Blake2_128Concat,
-	// 	ParaId,
-	// 	BoundedVec<DeferredMessage<T::RuntimeCall>, T::MaxDeferredMessages>,
-	// 	ValueQuery,
-	// >;
 
 	#[pallet::storage]
 	#[pallet::getter(fn deferred_indices)]
@@ -1265,6 +1238,8 @@ impl<T: Config> Pallet<T> {
 		weight_used
 	}
 
+	/// Try to place a message in the deferred queue for `sender`.
+	/// Returns the index and position where the message was stored.
 	fn try_place_in_deferred_queue(
 		sender: ParaId,
 		deferred_to: RelayBlockNumber,
@@ -1394,10 +1369,9 @@ impl<T: Config> Pallet<T> {
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
 	fn inject_deferred_messages(
 		sender: ParaId,
-		deferred_to: RelayBlockNumber,
+		index: DeferredIndex,
 		messages: BoundedVec<DeferredMessage<T::RuntimeCall>, T::MaxDeferredMessages>,
 	) {
-		let index = (deferred_to, 0);
 		DeferredIndices::<T>::mutate(sender, |indices| {
 			indices.try_insert(index).expect("Should not inject too many messages.");
 		});
