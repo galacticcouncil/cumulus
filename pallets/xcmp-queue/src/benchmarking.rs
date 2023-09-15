@@ -53,10 +53,13 @@ benchmarks! {
 		let relay_block = T::RelayChainBlockNumberProvider::current_block_number();
 		// We set `deferred_to` to the current relay block number to make sure that the messages are serviced.
 		let deferred_message = DeferredMessage { sent_at: relay_block, deferred_to: relay_block, sender: para_id, xcm };
-		// TODO: inject more messages. How many?
 		let deferred_xcm_messages = vec![deferred_message.clone(); max_messages];
 		crate::Pallet::<T>::inject_deferred_messages(para_id, relay_block, deferred_xcm_messages.try_into().unwrap());
+		let max_buckets = T::MaxDeferredBuckets::get();
+		let indices: Vec<DeferredIndex> = (1..(max_buckets)).map(|i| (relay_block, i as u16)).collect();
+		crate::Pallet::<T>::inject_bare_deferred_indices(para_id, indices);
 		assert_eq!(crate::Pallet::<T>::messages_deferred_to(para_id, (relay_block, 0)).len(), max_messages);
+		assert_eq!(crate::Pallet::<T>::deferred_indices(para_id).len(), max_buckets as usize);
 		// TODO: figure out how to get the weight of the xcm in a production runtime (Weigher not available)
 		let weight = Weight::from_parts(1_000_000 - 1_000, 1024);
 		assert!(crate::Pallet::<T>::update_xcmp_max_individual_weight(RawOrigin::Root.into(), weight).is_ok());

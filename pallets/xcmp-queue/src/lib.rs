@@ -1249,7 +1249,7 @@ impl<T: Config> Pallet<T> {
 					max_weight.saturating_sub(weight_used),
 					max_individual_weight,
 				));
-				bucket.iter().all(|maybe_msg| maybe_msg.is_none())
+				bucket.is_empty() || bucket.iter().all(|maybe_msg| maybe_msg.is_none())
 			});
 			if remove {
 				DeferredMessageBuckets::<T>::remove(sender, index);
@@ -1405,6 +1405,20 @@ impl<T: Config> Pallet<T> {
 		let messages = BoundedVec::try_from(messages).expect("Length was not changed. qed.");
 		DeferredMessageBuckets::<T>::mutate(sender, index, |deferred_messages| {
 			*deferred_messages = messages
+		});
+	}
+
+	/// Inject arbitrary indices.
+	/// WARNING: leads to inconsistent state.
+	#[cfg(any(test, feature = "runtime-benchmarks"))]
+	fn inject_bare_deferred_indices(
+		sender: ParaId,
+		insert: Vec<DeferredIndex>
+	) {
+		DeferredIndices::<T>::mutate(sender, |indices| {
+			for index in insert.into_iter() {
+				indices.try_insert(index).expect("Should not inject too many indices.");
+			}
 		});
 	}
 }
