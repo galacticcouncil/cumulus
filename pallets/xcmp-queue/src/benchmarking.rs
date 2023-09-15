@@ -67,6 +67,7 @@ benchmarks! {
 	verify
 	{
 		assert_eq!(crate::Pallet::<T>::messages_deferred_to(para_id, (relay_block, 0)).len(), 0);
+		assert_eq!(crate::Pallet::<T>::deferred_indices(para_id).len(), max_buckets as usize - 1);
 		// worst case is placing the message in overweight, so check that they end up there
 		assert!(Overweight::<T>::contains_key(0));
 		assert!(Overweight::<T>::contains_key((max_messages - 1) as u64));
