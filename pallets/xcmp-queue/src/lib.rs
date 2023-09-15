@@ -1411,10 +1411,7 @@ impl<T: Config> Pallet<T> {
 	/// Inject arbitrary indices.
 	/// WARNING: leads to inconsistent state.
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
-	fn inject_bare_deferred_indices(
-		sender: ParaId,
-		insert: Vec<DeferredIndex>
-	) {
+	fn inject_bare_deferred_indices(sender: ParaId, insert: Vec<DeferredIndex>) {
 		DeferredIndices::<T>::mutate(sender, |indices| {
 			for index in insert.into_iter() {
 				indices.try_insert(index).expect("Should not inject too many indices.");
