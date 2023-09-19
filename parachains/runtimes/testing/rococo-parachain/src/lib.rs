@@ -22,7 +22,7 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use cumulus_pallet_parachain_system::RelayNumberStrictlyIncreases;
+use cumulus_pallet_parachain_system::{RelayNumberStrictlyIncreases, LastRelayChainBlockNumber};
 use sp_api::impl_runtime_apis;
 use sp_core::OpaqueMetadata;
 use sp_runtime::{
@@ -482,6 +482,11 @@ impl cumulus_pallet_xcmp_queue::Config for Runtime {
 	type ControllerOriginConverter = XcmOriginToTransactDispatchOrigin;
 	type WeightInfo = cumulus_pallet_xcmp_queue::weights::SubstrateWeight<Runtime>;
 	type PriceForSiblingDelivery = ();
+	type ExecuteDeferredOrigin = EnsureRoot<AccountId>;
+	type XcmDeferFilter = ();
+	type MaxDeferredMessages = ConstU32<10>;
+	type MaxDeferredBuckets = ConstU32<10>;
+	type RelayChainBlockNumberProvider = ();
 }
 
 impl cumulus_pallet_dmp_queue::Config for Runtime {
