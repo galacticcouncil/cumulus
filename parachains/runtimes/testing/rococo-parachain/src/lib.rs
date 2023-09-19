@@ -486,7 +486,7 @@ impl cumulus_pallet_xcmp_queue::Config for Runtime {
 	type XcmDeferFilter = ();
 	type MaxDeferredMessages = ConstU32<10>;
 	type MaxDeferredBuckets = ConstU32<10>;
-	type RelayChainBlockNumberProvider = ();
+	type RelayChainBlockNumberProvider = cumulus_pallet_parachain_system::RelaychainBlockNumberProvider<Runtime>;
 }
 
 impl cumulus_pallet_dmp_queue::Config for Runtime {
