@@ -13,7 +13,9 @@ pub trait WeightInfo {
 	fn set_config_with_u32() -> Weight;
 	fn set_config_with_weight() -> Weight;
 	fn service_deferred() -> Weight;
-	fn discard_deferred() -> Weight;
+	fn discard_deferred_bucket() -> Weight;
+	fn discard_deferred_individual() -> Weight;
+	fn try_place_in_deferred_queue() -> Weight;
 }
 
 pub struct SubstrateWeight<T>(PhantomData<T>);

@@ -367,7 +367,10 @@ pub mod pallet {
 		/// - `maybe_position`: The position in the bucket of the message to be discarded. Will discard the whole bucket
 		///     if `None`.
 		#[pallet::call_index(11)]
-		#[pallet::weight((T::WeightInfo::discard_deferred(), DispatchClass::Operational))]
+		#[pallet::weight((
+			T::WeightInfo::discard_deferred_individual().max(T::WeightInfo::discard_deferred_bucket()),
+			DispatchClass::Operational
+		))]
 		pub fn discard_deferred(
 			origin: OriginFor<T>,
 			para_id: ParaId,
@@ -869,6 +872,7 @@ impl<T: Config> Pallet<T> {
 							let deferred_to = relay_block.saturating_add(defer_by);
 
 							let hash = xcm.using_encoded(sp_io::hashing::blake2_256);
+							weight_used.saturating_accrue(T::WeightInfo::try_place_in_deferred_queue());
 							let _ = Self::try_place_in_deferred_queue(
 								sender,
 								deferred_to,
