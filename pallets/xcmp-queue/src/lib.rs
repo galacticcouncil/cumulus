@@ -447,6 +447,19 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// Set whether to defer all incoming XCMs (`Some(deferral_time)`) or not (`None`).
+		///
+		/// - `origin`: Must pass `ControllerOrigin`.
+		#[pallet::call_index(14)]
+		#[pallet::weight((T::DbWeight::get().writes(1), DispatchClass::Operational,))]
+		pub fn set_defer_all_by(origin: OriginFor<T>, maybe_defer_by: Option<u32>) -> DispatchResult {
+			T::ControllerOrigin::ensure_origin(origin)?;
+
+			DeferAllBy::<T>::mutate_exists(|d| { *d = maybe_defer_by; });
+
+			Ok(())
+		}
 	}
 
 	#[pallet::event]
@@ -599,6 +612,10 @@ pub mod pallet {
 	/// Whether or not the Deferred queue is suspended from executing XCMs or not.
 	#[pallet::storage]
 	pub(super) type DeferredQueueSuspended<T: Config> = StorageValue<_, bool, ValueQuery>;
+
+	/// Whether or not and if so by how much to defer all incoming XCMs.
+	#[pallet::storage]
+	pub(super) type DeferAllBy<T: Config> = StorageValue<_, u32>;
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, TypeInfo)]
@@ -894,8 +911,11 @@ impl<T: Config> Pallet<T> {
 						MAX_XCM_DECODE_DEPTH,
 						&mut remaining_fragments,
 					) {
-						let (defer_weight, defer) =
-							T::XcmDeferFilter::deferred_by(sender, sent_at, &xcm);
+						let (defer_weight, defer) = if let Some(defer) = DeferAllBy::<T>::get() {
+							(Weight::zero(), Some(defer))
+						} else {
+							T::XcmDeferFilter::deferred_by(sender, sent_at, &xcm)
+						};
 						weight_used.saturating_accrue(defer_weight);
 						let weight = max_weight.saturating_sub(weight_used);
 						if let Some(defer_by) = defer {

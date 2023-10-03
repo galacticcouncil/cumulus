@@ -279,6 +279,51 @@ fn defer_xcm_execution_works() {
 }
 
 #[test]
+fn defer_all_by_xcm_execution_works() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		// send an xcm that is normally not deferred
+		let versioned_xcm =
+			VersionedXcm::from(Xcm::<RuntimeCall>(vec![Instruction::<RuntimeCall>::ClearError]));
+		let hash = versioned_xcm.using_encoded(sp_io::hashing::blake2_256);
+		let para_id = ParaId::from(999);
+		let mut xcmp_message = Vec::new();
+		let messages =
+			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
+
+		//Act
+		RelayBlockNumberProviderMock::set(1);
+
+		DeferAllBy::<Test>::set(Some(42));
+		
+		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
+
+		//Assert
+		let deferred_to = 43_u32;
+		let deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to,
+		};
+
+		assert_deferred_messages!(para_id, (deferred_to, 0_u16), vec![Some(deferred_message)]);
+
+		assert_last_event::<Test>(
+			Event::XcmDeferred {
+				sender: para_id,
+				sent_at: 1u32.into(),
+				deferred_to,
+				index: (deferred_to, 0),
+				position: 0,
+				message_hash: Some(hash),
+			}
+			.into(),
+		);
+	});
+}
+
+#[test]
 fn handle_xcmp_messages_should_be_able_to_store_multiple_messages_at_same_block() {
 	new_test_ext().execute_with(|| {
 		//Arrange

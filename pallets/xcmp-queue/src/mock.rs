@@ -224,6 +224,7 @@ impl XcmDeferFilter<RuntimeCall> for XcmDeferFilterMock {
 		let xcm = Xcm::<RuntimeCall>::try_from(xcm.clone()).unwrap();
 		let first = xcm.first().unwrap();
 		match first {
+			ClearError => (Weight::default(), None),
 			ClearOrigin => (Weight::default(), Some(5)),
 			ReserveAssetDeposited(_) => (Weight::default(), Some(5)),
 			RefundSurplus => (Weight::default(), Some(42)),
