@@ -419,6 +419,34 @@ pub mod pallet {
 			})?;
 			Ok(())
 		}
+
+		/// Suspends execution of deferred XCM for the XCMP queue, regardless of the sender's origin.
+		///
+		/// - `origin`: Must pass `ControllerOrigin`.
+		#[pallet::call_index(12)]
+		#[pallet::weight((T::DbWeight::get().writes(1), DispatchClass::Operational,))]
+		pub fn suspend_deferred_execution(origin: OriginFor<T>) -> DispatchResult {
+			T::ControllerOrigin::ensure_origin(origin)?;
+
+			DeferredQueueSuspended::<T>::put(true);
+
+			Ok(())
+		}
+
+		/// Resumes execution of deferred XCM for the XCMP queue.
+		///
+		/// Note that this function doesn't change the status of the in/out bound channels.
+		///
+		/// - `origin`: Must pass `ControllerOrigin`.
+		#[pallet::call_index(13)]
+		#[pallet::weight((T::DbWeight::get().writes(1), DispatchClass::Operational,))]
+		pub fn resume_deferred_execution(origin: OriginFor<T>) -> DispatchResult {
+			T::ControllerOrigin::ensure_origin(origin)?;
+
+			DeferredQueueSuspended::<T>::put(false);
+
+			Ok(())
+		}
 	}
 
 	#[pallet::event]
@@ -567,6 +595,10 @@ pub mod pallet {
 	/// Whether or not the XCMP queue is suspended from executing incoming XCMs or not.
 	#[pallet::storage]
 	pub(super) type QueueSuspended<T: Config> = StorageValue<_, bool, ValueQuery>;
+
+	/// Whether or not the Deferred queue is suspended from executing XCMs or not.
+	#[pallet::storage]
+	pub(super) type DeferredQueueSuspended<T: Config> = StorageValue<_, bool, ValueQuery>;
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, TypeInfo)]
@@ -1175,7 +1207,7 @@ impl<T: Config> Pallet<T> {
 		max_individual_weight: Weight,
 	) -> Weight {
 		let mut weight_used = Weight::zero();
-		if QueueSuspended::<T>::get() {
+		if QueueSuspended::<T>::get() || DeferredQueueSuspended::<T>::get() {
 			return weight_used;
 		}
 		let mut keys = DeferredIndices::<T>::iter_keys();
@@ -1204,7 +1236,7 @@ impl<T: Config> Pallet<T> {
 		max_individual_weight: Weight,
 	) -> Weight {
 		let mut weight_used = Weight::zero();
-		if QueueSuspended::<T>::get() {
+		if QueueSuspended::<T>::get() || DeferredQueueSuspended::<T>::get() {
 			return weight_used;
 		}
 
