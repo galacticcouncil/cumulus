@@ -13,11 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::mock::*;
+
 use super::*;
 use cumulus_primitives_core::XcmpMessageHandler;
+use frame_support::traits::OnIdle;
+use frame_support::weights::RuntimeDbWeight;
 use frame_support::{assert_noop, assert_ok};
+use frame_system::EventRecord;
 use mock::{new_test_ext, RuntimeCall, RuntimeOrigin, Test, XcmpQueue};
 use sp_runtime::traits::BadOrigin;
+
+use pretty_assertions::assert_eq;
 
 #[test]
 fn one_message_does_not_panic() {
@@ -143,6 +150,856 @@ fn suspend_xcm_execution_works() {
 
 		let queued_xcm = InboundXcmpMessages::<Test>::get(ParaId::from(2000), 1u32);
 		assert_eq!(queued_xcm, xcm);
+	});
+}
+
+#[test]
+fn suspend_deferred_flag_suspends_deferred_execution() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let versioned_xcm = create_versioned_reserve_asset_deposited();
+		let para_id = ParaId::from(999);
+		let mut xcmp_message = Vec::new();
+		let messages =
+			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
+
+		RelayBlockNumberProviderMock::set(1);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+		let deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+		assert_eq!(
+			DeferredMessageBuckets::<Test>::get(para_id, (6, 0)),
+			create_bounded_vec(vec![Some(deferred_message.clone())])
+		);
+
+		let QueueConfigData { xcmp_max_individual_weight, .. } = <QueueConfig<Test>>::get();
+
+		//Act
+		DeferredQueueSuspended::<Test>::put(true);
+		XcmpQueue::service_deferred_queues(Weight::MAX, 7, xcmp_max_individual_weight);
+
+		assert_eq!(
+			DeferredMessageBuckets::<Test>::get(para_id, (6, 0)),
+			create_bounded_vec(vec![Some(deferred_message)])
+		);
+	});
+}
+
+#[test]
+fn suspend_also_suspends_deferred_execution() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let versioned_xcm = create_versioned_reserve_asset_deposited();
+		let para_id = ParaId::from(999);
+		let mut xcmp_message = Vec::new();
+		let messages =
+			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
+
+		RelayBlockNumberProviderMock::set(1);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+		let deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+		assert_eq!(
+			DeferredMessageBuckets::<Test>::get(para_id, (6, 0)),
+			create_bounded_vec(vec![Some(deferred_message.clone())])
+		);
+
+		let QueueConfigData { xcmp_max_individual_weight, .. } = <QueueConfig<Test>>::get();
+
+		//Act
+		QueueSuspended::<Test>::put(true);
+		XcmpQueue::service_deferred_queues(Weight::MAX, 7, xcmp_max_individual_weight);
+
+		assert_eq!(
+			DeferredMessageBuckets::<Test>::get(para_id, (6, 0)),
+			create_bounded_vec(vec![Some(deferred_message)])
+		);
+	});
+}
+
+macro_rules! assert_deferred_messages {
+	($para_id:expr, $index:expr, $deferred_messages:expr) => {
+		assert_eq!(
+			create_bounded_btreeset([$index].into_iter()),
+			DeferredIndices::<Test>::get($para_id)
+		);
+		assert_eq!(
+			create_bounded_vec($deferred_messages),
+			DeferredMessageBuckets::<Test>::get($para_id, $index),
+		);
+	};
+}
+
+#[test]
+fn defer_xcm_execution_works() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let versioned_xcm = create_versioned_reserve_asset_deposited();
+		let hash = versioned_xcm.using_encoded(sp_io::hashing::blake2_256);
+		let para_id = ParaId::from(999);
+		let mut xcmp_message = Vec::new();
+		let messages =
+			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
+
+		//Act
+		RelayBlockNumberProviderMock::set(1);
+		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
+
+		//Assert
+		let deferred_to = 6_u32;
+		let deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to,
+		};
+
+		assert_deferred_messages!(para_id, (deferred_to, 0_u16), vec![Some(deferred_message)]);
+
+		assert_last_event::<Test>(
+			Event::XcmDeferred {
+				sender: para_id,
+				sent_at: 1u32.into(),
+				deferred_to,
+				index: (deferred_to, 0),
+				position: 0,
+				message_hash: Some(hash),
+			}
+			.into(),
+		);
+	});
+}
+
+#[test]
+fn defer_all_by_xcm_execution_works() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		// send an xcm that is normally not deferred
+		let versioned_xcm =
+			VersionedXcm::from(Xcm::<RuntimeCall>(vec![Instruction::<RuntimeCall>::ClearError]));
+		let hash = versioned_xcm.using_encoded(sp_io::hashing::blake2_256);
+		let para_id = ParaId::from(999);
+		let mut xcmp_message = Vec::new();
+		let messages =
+			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
+
+		//Act
+		RelayBlockNumberProviderMock::set(1);
+
+		DeferAllBy::<Test>::set(Some(42));
+		
+		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
+
+		//Assert
+		let deferred_to = 43_u32;
+		let deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to,
+		};
+
+		assert_deferred_messages!(para_id, (deferred_to, 0_u16), vec![Some(deferred_message)]);
+
+		assert_last_event::<Test>(
+			Event::XcmDeferred {
+				sender: para_id,
+				sent_at: 1u32.into(),
+				deferred_to,
+				index: (deferred_to, 0),
+				position: 0,
+				message_hash: Some(hash),
+			}
+			.into(),
+		);
+	});
+}
+
+#[test]
+fn handle_xcmp_messages_should_be_able_to_store_multiple_messages_at_same_block() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let versioned_xcm = create_versioned_reserve_asset_deposited();
+		let hash = versioned_xcm.using_encoded(sp_io::hashing::blake2_256);
+		let para_id = ParaId::from(999);
+		let mut xcmp_message = Vec::new();
+		let messages =
+			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
+
+		//Act
+		RelayBlockNumberProviderMock::set(1);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
+
+		//Assert
+		let deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+
+		assert_deferred_messages!(
+			para_id,
+			(6, 0_u16),
+			vec![Some(deferred_message.clone()), Some(deferred_message)]
+		);
+
+		assert_last_event::<Test>(
+			Event::XcmDeferred {
+				sender: para_id,
+				sent_at: 1u32.into(),
+				deferred_to: 6u32.into(),
+				index: (6, 0),
+				position: 1,
+				message_hash: Some(hash),
+			}
+			.into(),
+		);
+	});
+}
+
+#[test]
+fn handle_xcmp_messages_should_execute_deferred_message_and_remove_from_deferred_storage() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let versioned_xcm = create_versioned_reserve_asset_deposited();
+		let para_id = ParaId::from(999);
+		let mut xcmp_message = Vec::new();
+		let messages =
+			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
+
+		//Act
+		RelayBlockNumberProviderMock::set(1);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+
+		//Assert
+		let deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+
+		assert_deferred_messages!(
+			para_id,
+			(6, 0_u16),
+			vec![Some(deferred_message.clone()), Some(deferred_message)]
+		);
+
+		let QueueConfigData { xcmp_max_individual_weight, .. } = <QueueConfig<Test>>::get();
+
+		XcmpQueue::service_deferred_queues(Weight::MAX, 7, xcmp_max_individual_weight);
+
+		assert_eq!(create_bounded_btreeset([].into_iter()), DeferredIndices::<Test>::get(para_id));
+	});
+}
+
+#[test]
+fn on_idle_should_service_deferred_message() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let versioned_xcm = create_versioned_reserve_asset_deposited();
+		let para_id = ParaId::from(999);
+		let mut xcmp_message = Vec::new();
+		let messages =
+			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
+
+		RelayBlockNumberProviderMock::set(1);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+
+		let deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+
+		assert_deferred_messages!(para_id, (6, 0_u16), vec![Some(deferred_message)]);
+		RelayBlockNumberProviderMock::set(7);
+
+		//Act
+		XcmpQueue::on_idle(1, Weight::MAX);
+
+		//Assert
+		assert_eq!(create_bounded_btreeset([].into_iter()), DeferredIndices::<Test>::get(para_id));
+	});
+}
+
+#[test]
+fn service_deferred_should_execute_deferred_messages() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let versioned_xcm = create_versioned_reserve_asset_deposited();
+		let hash = versioned_xcm.using_encoded(sp_io::hashing::blake2_256);
+		let para_id = ParaId::from(999);
+		let para_id2 = ParaId::from(1000);
+		let mut xcmp_message = Vec::new();
+		let mut xcmp_message2 = Vec::new();
+		let messages = vec![
+			(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode())),
+			(para_id2, 2u32.into(), format_message(&mut xcmp_message2, versioned_xcm.encode())),
+		];
+
+		//Act
+		RelayBlockNumberProviderMock::set(2);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+
+		//Assert
+		let deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 7,
+		};
+
+		assert_deferred_messages!(para_id, (7, 0_u16), vec![Some(deferred_message)]);
+		RelayBlockNumberProviderMock::set(7);
+
+		//Act
+		assert_ok!(XcmpQueue::service_deferred(RuntimeOrigin::root(), Weight::MAX, para_id));
+
+		//Assert
+		assert_eq!(create_bounded_btreeset([].into_iter()), DeferredIndices::<Test>::get(para_id));
+		let deferred_message = DeferredMessage {
+			sent_at: 2u32.into(),
+			sender: para_id2,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 7,
+		};
+
+		assert_deferred_messages!(para_id2, (7, 0_u16), vec![Some(deferred_message)]);
+		assert_last_event::<Test>(
+			Event::Success { message_hash: Some(hash), weight: Weight::from_parts(1000000, 1024) }
+				.into(),
+		);
+	});
+}
+
+#[test]
+fn service_deferred_should_store_unprocessed_messages() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let versioned_xcm = create_versioned_reserve_asset_deposited();
+		let hash = versioned_xcm.using_encoded(sp_io::hashing::blake2_256);
+		let para_id = ParaId::from(999);
+		let mut xcmp_message = Vec::new();
+		let messages =
+			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
+
+		//Act
+		RelayBlockNumberProviderMock::set(2);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+		RelayBlockNumberProviderMock::set(3);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+
+		//Assert
+		let msg_to_process = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 7,
+		};
+		let msg_not_to_process = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 8,
+		};
+
+		assert_eq!(
+			create_bounded_btreeset([(7, 0), (8, 0)].into_iter()),
+			DeferredIndices::<Test>::get(para_id)
+		);
+		assert_eq!(
+			create_bounded_vec(vec![Some(msg_to_process)]),
+			DeferredMessageBuckets::<Test>::get(para_id, (7, 0)),
+		);
+		assert_eq!(
+			create_bounded_vec(vec![Some(msg_not_to_process.clone())]),
+			DeferredMessageBuckets::<Test>::get(para_id, (8, 0)),
+		);
+		RelayBlockNumberProviderMock::set(7);
+
+		//Act
+		assert_ok!(XcmpQueue::service_deferred(RuntimeOrigin::root(), Weight::MAX, para_id));
+
+		//Assert
+		assert_deferred_messages!(para_id, (8, 0), vec![Some(msg_not_to_process)]);
+		assert_last_event::<Test>(
+			Event::Success { message_hash: Some(hash), weight: Weight::from_parts(1000000, 1024) }
+				.into(),
+		);
+	});
+}
+
+#[test]
+fn service_deferred_should_fail_when_called_with_wrong_origin() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let versioned_xcm = create_versioned_reserve_asset_deposited();
+		let para_id = ParaId::from(999);
+		let mut xcmp_message = Vec::new();
+		let messages =
+			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, versioned_xcm.encode()))];
+
+		RelayBlockNumberProviderMock::set(1);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+
+		let deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+
+		assert_deferred_messages!(para_id, (6, 0), vec![Some(deferred_message)]);
+
+		//Act and assert
+		assert_noop!(
+			XcmpQueue::service_deferred(RuntimeOrigin::signed(100), Weight::MAX, para_id),
+			BadOrigin
+		);
+	});
+}
+
+#[test]
+fn service_deferred_queues_should_pass_overweight_messages_to_overweight_queue() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		use xcm_executor::traits::WeightBounds;
+		let mut xcm = Xcm::<RuntimeCall>(vec![Instruction::<RuntimeCall>::ReserveAssetDeposited(
+			MultiAssets::new(),
+		)]);
+		// We just set a very low max_inidividual_weight to trigger the overweight logic
+		let db_weights: RuntimeDbWeight = <Test as frame_system::Config>::DbWeight::get();
+		let low_max_individual_weight = Weight::from_parts(100, 1);
+		let low_max_weight =
+			low_max_individual_weight.saturating_add(db_weights.reads_writes(2, 2));
+		assert!(FixedWeigher::weight(&mut xcm).unwrap().any_gt(low_max_weight));
+		let versioned_xcm = VersionedXcm::from(xcm);
+		let para_id = ParaId::from(999);
+		let mut xcmp_message = Vec::new();
+		let encoded_xcm = versioned_xcm.encode();
+		let messages =
+			vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, encoded_xcm.clone()))];
+
+		RelayBlockNumberProviderMock::set(1);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+
+		let deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+		assert_deferred_messages!(para_id, (6, 0), vec![Some(deferred_message)]);
+		assert_eq!(Overweight::<Test>::count(), 0);
+
+		//Act
+		XcmpQueue::service_deferred_queues(low_max_weight, 7, low_max_individual_weight);
+
+		//Assert
+		assert_eq!(create_bounded_btreeset([].into_iter()), DeferredIndices::<Test>::get(para_id));
+		assert_eq!(Overweight::<Test>::get(0), Some((ParaId::from(999), 1, encoded_xcm)));
+		assert_eq!(Overweight::<Test>::count(), 1);
+	});
+}
+
+#[test]
+fn service_deferred_queues_should_stop_processing_when_weight_limit_is_reached_for_different_queues(
+) {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		use xcm_executor::traits::WeightBounds;
+		let mut xcm = Xcm::<RuntimeCall>(vec![Instruction::<RuntimeCall>::ReserveAssetDeposited(
+			MultiAssets::new(),
+		)]);
+		// We just set a very low max weight to stop processing deferred messages early
+		let db_weights: RuntimeDbWeight = <Test as frame_system::Config>::DbWeight::get();
+		let low_max_weight = FixedWeigher::weight(&mut xcm)
+			.unwrap()
+			.saturating_add(db_weights.reads_writes(2, 2));
+		let versioned_xcm = VersionedXcm::from(xcm);
+		let para_id = ParaId::from(999);
+		let second_para_id = ParaId::from(1000);
+		let mut xcmp_message = Vec::new();
+		let formatted_msg = format_message(&mut xcmp_message, versioned_xcm.encode());
+		let messages = vec![
+			(para_id, 1u32.into(), formatted_msg),
+			(second_para_id, 1u32.into(), formatted_msg),
+		];
+
+		RelayBlockNumberProviderMock::set(1);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+
+		let deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+		assert_deferred_messages!(para_id, (6, 0_u16), vec![Some(deferred_message)]);
+		let second_deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: second_para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+		assert_deferred_messages!(
+			second_para_id,
+			(6, 0_u16),
+			vec![Some(second_deferred_message.clone())]
+		);
+
+		let QueueConfigData { xcmp_max_individual_weight, .. } = <QueueConfig<Test>>::get();
+		//Act
+		XcmpQueue::service_deferred_queues(low_max_weight, 7, xcmp_max_individual_weight);
+
+		//Assert
+		assert_eq!(create_bounded_btreeset([].into_iter()), DeferredIndices::<Test>::get(para_id));
+		assert_eq!(
+			DeferredMessageBuckets::<Test>::get(second_para_id, (6, 0)),
+			create_bounded_vec(vec![Some(second_deferred_message)])
+		);
+	});
+}
+
+#[test]
+fn service_deferred_queues_should_stop_processing_when_weight_limit_is_reached_for_the_same_queue()
+{
+	new_test_ext().execute_with(|| {
+		//Arrange
+		use xcm_executor::traits::WeightBounds;
+		let mut xcm = Xcm::<RuntimeCall>(vec![Instruction::<RuntimeCall>::ReserveAssetDeposited(
+			MultiAssets::new(),
+		)]);
+		// We just set a very low max weight to stop processing deferred messages early
+		let db_weights: RuntimeDbWeight = <Test as frame_system::Config>::DbWeight::get();
+		let low_max_weight = FixedWeigher::weight(&mut xcm)
+			.unwrap()
+			.saturating_add(db_weights.reads_writes(2, 2));
+		let versioned_xcm = VersionedXcm::from(xcm);
+		let para_id = ParaId::from(999);
+		let mut xcmp_message = Vec::new();
+		let mut xcms = Vec::new();
+		xcms.extend(versioned_xcm.encode());
+		// We put the same message again, so that we can stop after the first one.
+		xcms.extend(versioned_xcm.encode());
+		let messages = vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, xcms))];
+
+		RelayBlockNumberProviderMock::set(1);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+
+		let deferred_message = DeferredMessage {
+			sent_at: 1u32.into(),
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+		assert_deferred_messages!(
+			para_id,
+			(6, 0_u16),
+			vec![Some(deferred_message.clone()), Some(deferred_message.clone())]
+		);
+
+		let QueueConfigData { xcmp_max_individual_weight, .. } = <QueueConfig<Test>>::get();
+		//Act
+		XcmpQueue::service_deferred_queues(low_max_weight, 7, xcmp_max_individual_weight);
+
+		//Assert
+		assert_deferred_messages!(para_id, (6, 0_u16), vec![None, Some(deferred_message)]);
+	});
+}
+
+#[test]
+fn discard_deferred_should_remove_message_from_storage() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let versioned_xcm = create_versioned_reserve_asset_deposited();
+		let second_versioned_xcm =
+			VersionedXcm::from(Xcm::<RuntimeCall>(vec![Instruction::<RuntimeCall>::ClearOrigin]));
+		let para_id = ParaId::from(999);
+		let mut xcms = Vec::new();
+		xcms.extend(versioned_xcm.encode());
+		// We put the same message that we will remove to test whether messages with the same hash but different block get removed
+		xcms.extend(second_versioned_xcm.encode());
+		let mut xcmp_message = Vec::new();
+		let messages = vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, xcms))];
+
+		RelayBlockNumberProviderMock::set(1);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+
+		let mut second_xcms = Vec::new();
+		// We put the same message twice to test removal of identical messages
+		second_xcms.extend(second_versioned_xcm.encode());
+		second_xcms.extend(second_versioned_xcm.encode());
+		let mut second_xcmp_message = Vec::new();
+		let second_messages =
+			vec![(para_id, 2u32.into(), format_message(&mut second_xcmp_message, second_xcms))];
+		RelayBlockNumberProviderMock::set(2);
+		XcmpQueue::handle_xcmp_messages(second_messages.clone().into_iter(), Weight::MAX);
+
+		let deferred_message = DeferredMessage {
+			sent_at: 1,
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+		let second_deferred_message = DeferredMessage {
+			sent_at: 1,
+			sender: para_id,
+			xcm: second_versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+		let message_to_remove = DeferredMessage {
+			sent_at: 2,
+			sender: para_id,
+			xcm: second_versioned_xcm.clone(),
+			deferred_to: 7,
+		};
+
+		assert_eq!(
+			DeferredMessageBuckets::<Test>::get(para_id, (6, 0)),
+			create_bounded_vec(vec![
+				Some(deferred_message.clone()),
+				Some(second_deferred_message.clone())
+			])
+		);
+		assert_eq!(
+			DeferredMessageBuckets::<Test>::get(para_id, (7, 0)),
+			create_bounded_vec(vec![
+				Some(message_to_remove.clone()),
+				Some(message_to_remove.clone()),
+			])
+		);
+
+		//Act
+		assert_ok!(XcmpQueue::discard_deferred(RuntimeOrigin::root(), para_id, (7, 0), Some(0),));
+
+		//Assert
+		assert_eq!(
+			DeferredMessageBuckets::<Test>::get(para_id, (6, 0)),
+			create_bounded_vec(vec![Some(deferred_message), Some(second_deferred_message)])
+		);
+		assert_eq!(
+			DeferredMessageBuckets::<Test>::get(para_id, (7, 0)),
+			create_bounded_vec(vec![None, Some(message_to_remove),])
+		);
+	});
+}
+
+#[test]
+fn discard_deferred_should_remove_messages_when_only_required_params_specified() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let versioned_xcm = create_versioned_reserve_asset_deposited();
+		let second_versioned_xcm =
+			VersionedXcm::from(Xcm::<RuntimeCall>(vec![Instruction::<RuntimeCall>::ClearOrigin]));
+		let para_id = ParaId::from(999);
+		let mut xcms = Vec::new();
+		xcms.extend(versioned_xcm.encode());
+		// We put the same message that we will remove to test whether messages with the same hash but different block get removed
+		xcms.extend(second_versioned_xcm.encode());
+		let mut xcmp_message = Vec::new();
+		let messages = vec![(para_id, 1u32.into(), format_message(&mut xcmp_message, xcms))];
+
+		RelayBlockNumberProviderMock::set(1);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+
+		let mut second_xcmp_message = Vec::new();
+		let second_messages = vec![(
+			para_id,
+			2u32.into(),
+			format_message(&mut second_xcmp_message, second_versioned_xcm.encode()),
+		)];
+		RelayBlockNumberProviderMock::set(2);
+		XcmpQueue::handle_xcmp_messages(second_messages.clone().into_iter(), Weight::MAX);
+
+		let deferred_message = DeferredMessage {
+			sent_at: 1,
+			sender: para_id,
+			xcm: versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+		let second_deferred_message = DeferredMessage {
+			sent_at: 1,
+			sender: para_id,
+			xcm: second_versioned_xcm.clone(),
+			deferred_to: 6,
+		};
+		let third_message = DeferredMessage {
+			sent_at: 2,
+			sender: para_id,
+			xcm: second_versioned_xcm.clone(),
+			deferred_to: 7,
+		};
+
+		assert_eq!(
+			DeferredMessageBuckets::<Test>::get(para_id, (6, 0)),
+			create_bounded_vec(vec![
+				Some(deferred_message.clone()),
+				Some(second_deferred_message.clone())
+			])
+		);
+		assert_eq!(
+			DeferredMessageBuckets::<Test>::get(para_id, (7, 0)),
+			create_bounded_vec(vec![Some(third_message.clone())])
+		);
+
+		//Act
+		assert_ok!(XcmpQueue::discard_deferred(RuntimeOrigin::root(), para_id, (6, 0), None));
+
+		//Assert
+		assert_eq!(
+			DeferredMessageBuckets::<Test>::get(para_id, (6, 0)),
+			create_bounded_vec(vec![])
+		);
+		assert_eq!(
+			DeferredMessageBuckets::<Test>::get(para_id, (7, 0)),
+			create_bounded_vec(vec![Some(third_message)])
+		);
+	});
+}
+
+#[test]
+fn handle_xcmp_messages_should_execute_deferred_message_from_different_blocks() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let versioned_xcm = create_versioned_reserve_asset_deposited();
+
+		let para_id = ParaId::from(999);
+		let para_id_2 = ParaId::from(1000);
+
+		let mut xcmp_message = Vec::new();
+		let formatted_msg = format_message(&mut xcmp_message, versioned_xcm.encode());
+		let messages = vec![(para_id, 1u32.into(), formatted_msg)];
+		let messages2 = vec![(para_id_2, 2u32.into(), formatted_msg)];
+
+		RelayBlockNumberProviderMock::set(1);
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+		RelayBlockNumberProviderMock::set(2);
+		XcmpQueue::handle_xcmp_messages(messages2.clone().into_iter(), Weight::MAX);
+
+		assert_deferred_messages!(
+			para_id,
+			(6_u32, 0_u16),
+			vec![Some(DeferredMessage {
+				sent_at: 1u32.into(),
+				sender: para_id,
+				xcm: versioned_xcm.clone(),
+				deferred_to: 6
+			})]
+		);
+		assert_deferred_messages!(
+			para_id_2,
+			(7_u32, 0_u16),
+			vec![Some(DeferredMessage {
+				sent_at: 2u32.into(),
+				sender: para_id_2,
+				xcm: versioned_xcm.clone(),
+				deferred_to: 7
+			})]
+		);
+
+		let QueueConfigData { xcmp_max_individual_weight, .. } = <QueueConfig<Test>>::get();
+
+		//Act
+		XcmpQueue::service_deferred_queues(Weight::MAX, 6, xcmp_max_individual_weight);
+
+		//Assert
+		assert_eq!(
+			DeferredMessageBuckets::<Test>::get(para_id, (6_u32, 0_u16)),
+			create_bounded_vec(vec![])
+		);
+
+		assert_deferred_messages!(
+			para_id_2,
+			(7_u32, 0_u16),
+			vec![Some(DeferredMessage {
+				sent_at: 2u32.into(),
+				sender: para_id_2,
+				xcm: versioned_xcm.clone(),
+				deferred_to: 7
+			})]
+		);
+	});
+}
+
+#[test]
+fn deferred_xcm_should_be_executed_and_removed_from_storage() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let versioned_xcm = create_versioned_reserve_asset_deposited();
+		let xcm = versioned_xcm.encode();
+		let para_id = ParaId::from(999);
+		let mut xcmp_message = Vec::new();
+		let formatted_msg = format_message(&mut xcmp_message, xcm.clone());
+		let messages = vec![(para_id, 1u32.into(), formatted_msg)];
+		RelayBlockNumberProviderMock::set(1);
+
+		//Act
+		XcmpQueue::handle_xcmp_messages(messages.clone().into_iter(), Weight::MAX);
+		let messages = vec![(para_id, 6u32.into(), formatted_msg)];
+		RelayBlockNumberProviderMock::set(6);
+		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
+
+		//Assert
+		let expected_msg =
+			DeferredMessage { sent_at: 6, deferred_to: 11, xcm: versioned_xcm, sender: para_id };
+
+		assert_deferred_messages!(para_id, (11_u32, 0_u16), vec![Some(expected_msg)]);
+	});
+}
+
+#[test]
+fn handle_xcmp_messages_should_both_defer_and_execute_xcm_message() {
+	new_test_ext().execute_with(|| {
+		//Arrange
+		let assets = MultiAssets::new();
+		let versioned_xcm = VersionedXcm::from(Xcm::<RuntimeCall>(vec![
+			Instruction::<RuntimeCall>::ReserveAssetDeposited(assets),
+		]));
+		let xcm = versioned_xcm.encode();
+		let mut message_format = XcmpMessageFormat::ConcatenatedVersionedXcm.encode();
+		message_format.extend(xcm.clone());
+		let messages = vec![(ParaId::from(999), 1u32.into(), message_format.as_slice())];
+		let messages2 = vec![(ParaId::from(1000), 7u32.into(), message_format.as_slice())];
+		RelayBlockNumberProviderMock::set(1);
+
+		//Act
+		XcmpQueue::handle_xcmp_messages(messages.into_iter(), Weight::MAX);
+		let expected_msg = DeferredMessage {
+			sent_at: 1,
+			deferred_to: 6,
+			xcm: versioned_xcm.clone(),
+			sender: ParaId::from(999),
+		};
+		assert_deferred_messages!(ParaId::from(999), (6_u32, 0_u16), vec![Some(expected_msg)]);
+		RelayBlockNumberProviderMock::set(7);
+		XcmpQueue::handle_xcmp_messages(messages2.into_iter(), Weight::MAX);
+
+		assert_eq!(
+			create_bounded_btreeset([].into_iter()),
+			DeferredIndices::<Test>::get(ParaId::from(999))
+		);
+
+		let expected_msg = DeferredMessage {
+			sent_at: 7,
+			deferred_to: 12,
+			xcm: versioned_xcm,
+			sender: ParaId::from(1000),
+		};
+		assert_deferred_messages!(ParaId::from(1000), (12_u32, 0_u16), vec![Some(expected_msg)]);
 	});
 }
 
@@ -340,4 +1197,12 @@ fn xcmp_queue_consumes_dest_and_msg_on_ok_validate() {
 			)
 		);
 	});
+}
+
+fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
+	let events = frame_system::Pallet::<T>::events();
+	let system_event: <T as frame_system::Config>::RuntimeEvent = generic_event.into();
+	// compare to the last event record
+	let EventRecord { event, .. } = &events[events.len() - 1];
+	assert_eq!(event, &system_event);
 }

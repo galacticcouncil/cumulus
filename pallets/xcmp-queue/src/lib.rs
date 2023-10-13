@@ -36,6 +36,9 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 pub mod weights;
+use core::ops::Sub;
+
+use frame_support::traits::Defensive;
 pub use weights::WeightInfo;
 
 use codec::{Decode, DecodeLimit, Encode};
@@ -43,6 +46,7 @@ use cumulus_primitives_core::{
 	relay_chain::BlockNumber as RelayBlockNumber, ChannelStatus, GetChannelInfo, MessageSendError,
 	ParaId, XcmpMessageFormat, XcmpMessageHandler, XcmpMessageSource,
 };
+use frame_support::dispatch::DispatchResult;
 use frame_support::{
 	traits::{EnsureOrigin, Get},
 	weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, Weight},
@@ -53,7 +57,11 @@ use rand_chacha::{
 	ChaChaRng,
 };
 use scale_info::TypeInfo;
+use sp_core::bounded::{BoundedBTreeSet, BoundedVec};
+use sp_runtime::traits::BlockNumberProvider;
 use sp_runtime::RuntimeDebug;
+use sp_std::collections::btree_set::BTreeSet;
+use sp_std::ops::Bound::Included;
 use sp_std::{convert::TryFrom, prelude::*};
 use xcm::{latest::prelude::*, VersionedXcm, WrapVersion, MAX_XCM_DECODE_DEPTH};
 use xcm_executor::traits::ConvertOrigin;
@@ -62,6 +70,14 @@ pub use pallet::*;
 
 /// Index used to identify overweight XCMs.
 pub type OverweightIndex = u64;
+
+#[derive(Encode, Decode, Debug, Eq, PartialEq, Clone, TypeInfo)]
+pub struct DeferredMessage<TRuntimeCall> {
+	sent_at: RelayBlockNumber,
+	deferred_to: RelayBlockNumber,
+	sender: ParaId,
+	xcm: VersionedXcm<TRuntimeCall>,
+}
 
 const LOG_TARGET: &str = "xcmp_queue";
 const DEFAULT_POV_SIZE: u64 = 64 * 1024; // 64 KB
@@ -72,10 +88,33 @@ const MAX_MESSAGES_PER_BLOCK: u8 = 10;
 // Maximum amount of messages that can exist in the overweight queue at any given time.
 const MAX_OVERWEIGHT_MESSAGES: u32 = 1000;
 
+/// Type used to store deferred message buckets.
+pub type DeferredIndex = (RelayBlockNumber, u16);
+
+/// Determine whether to execute incoming messages directly or defer them by a certain amount
+/// of relay chain blocks.
+pub trait XcmDeferFilter<TRuntimeCall> {
+	fn deferred_by(
+		para: ParaId,
+		sent_at: RelayBlockNumber,
+		xcm: &VersionedXcm<TRuntimeCall>,
+	) -> (Weight, Option<RelayBlockNumber>);
+}
+
+impl<TRuntimeCall> XcmDeferFilter<TRuntimeCall> for () {
+	fn deferred_by(
+		_para: ParaId,
+		_sent_at: RelayBlockNumber,
+		_xcm: &VersionedXcm<TRuntimeCall>,
+	) -> (Weight, Option<RelayBlockNumber>) {
+		(Weight::default(), None)
+	}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, Blake2_128Concat};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -100,6 +139,9 @@ pub mod pallet {
 		/// The origin that is allowed to execute overweight messages.
 		type ExecuteOverweightOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
+		/// The origin that is allowed to execute deferred messages.
+		type ExecuteDeferredOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+
 		/// The origin that is allowed to resume or suspend the XCMP queue.
 		type ControllerOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
@@ -109,6 +151,18 @@ pub mod pallet {
 
 		/// The price for delivering an XCM to a sibling parachain destination.
 		type PriceForSiblingDelivery: PriceForSiblingDelivery;
+
+		/// Filter logic to defer XCM message
+		type XcmDeferFilter: XcmDeferFilter<Self::RuntimeCall>;
+
+		/// The maximum number of messages allowed in one bucket.
+		type MaxDeferredMessages: Get<u32>;
+
+		/// The maximum number of deferred message buckets per parachain.
+		type MaxDeferredBuckets: Get<u32>;
+
+		/// Relay chain block number provider to allow processing deferred messages on idle
+		type RelayChainBlockNumberProvider: BlockNumberProvider<BlockNumber = RelayBlockNumber>;
 
 		/// The weight information of this pallet.
 		type WeightInfo: WeightInfo;
@@ -121,8 +175,9 @@ pub mod pallet {
 		}
 
 		fn on_idle(_now: T::BlockNumber, max_weight: Weight) -> Weight {
-			// on_idle processes additional messages with any remaining block weight.
-			Self::service_xcmp_queue(max_weight)
+			let relay_block_number = T::RelayChainBlockNumberProvider::current_block_number();
+			let QueueConfigData { xcmp_max_individual_weight, .. } = QueueConfig::<T>::get();
+			Self::service_queues(max_weight, relay_block_number, xcmp_max_individual_weight)
 		}
 	}
 
@@ -277,6 +332,134 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// This extrinsic executes deferred messages up to the specified `weight_limit` and the current relay chain block number.
+		///
+		/// - `origin`: Must pass `ExecuteDeferredOrigin`.
+		/// - `weight_limit`: Maximum weight budget for deferred message execution.
+		/// - `para_id`: The queue to service.
+		#[pallet::call_index(9)]
+		#[pallet::weight((weight_limit.saturating_add(T::WeightInfo::service_deferred()), DispatchClass::Operational))]
+		pub fn service_deferred(
+			origin: OriginFor<T>,
+			weight_limit: Weight,
+			para_id: ParaId,
+		) -> DispatchResultWithPostInfo {
+			T::ExecuteDeferredOrigin::ensure_origin(origin)?;
+
+			let relay_block_number = T::RelayChainBlockNumberProvider::current_block_number();
+			let QueueConfigData { xcmp_max_individual_weight, .. } = QueueConfig::<T>::get();
+
+			let weight_used = Self::service_deferred_queue(
+				para_id,
+				weight_limit,
+				relay_block_number,
+				xcmp_max_individual_weight,
+			);
+			Ok(Some(weight_used.saturating_add(Weight::from_parts(1_000_000, 0))).into())
+		}
+
+		/// This extrinsic discards all deferred messages that match the given parameters.
+		///
+		/// - `origin`: Must pass `ExecuteDeferredOrigin`
+		/// - `para_id`: The parachain id where the deferred messages were sent from
+		/// - `index`: The relay chain block number to which the messages were deferred as well as the bucket index.
+		/// - `maybe_position`: The position in the bucket of the message to be discarded. Will discard the whole bucket
+		///     if `None`.
+		#[pallet::call_index(11)]
+		#[pallet::weight((
+			T::WeightInfo::discard_deferred_individual().max(T::WeightInfo::discard_deferred_bucket()),
+			DispatchClass::Operational
+		))]
+		pub fn discard_deferred(
+			origin: OriginFor<T>,
+			para_id: ParaId,
+			index: DeferredIndex,
+			maybe_position: Option<u32>,
+		) -> DispatchResult {
+			T::ExecuteDeferredOrigin::ensure_origin(origin)?;
+
+			DeferredMessageBuckets::<T>::mutate_exists(para_id, index, |deferred| {
+				if let Some(position) = maybe_position {
+					deferred
+						.as_mut()
+						.map(
+							|d: &mut BoundedVec<
+								Option<DeferredMessage<<T as frame_system::Config>::RuntimeCall>>,
+								<T as Config>::MaxDeferredMessages,
+							>| {
+								d.get_mut(position as usize)
+									.map(|maybe_msg| {
+										if let Some(msg) = maybe_msg {
+											let hash =
+												msg.xcm.using_encoded(sp_io::hashing::blake2_256);
+											Self::deposit_event(Event::DeferredXcmDiscarded {
+												sender: para_id,
+												sent_at: msg.sent_at,
+												deferred_to: msg.deferred_to,
+												index,
+												position,
+												message_hash: Some(hash),
+											});
+											*maybe_msg = None;
+											Ok(())
+										} else {
+											Err(Error::<T>::MessageNotFound)
+										}
+									})
+									.unwrap_or(Err(Error::<T>::MessageNotFound))
+							},
+						)
+						.unwrap_or(Err(Error::<T>::MessageNotFound))
+				} else {
+					*deferred = None;
+					Self::deposit_event(Event::DeferredBucketDiscarded { sender: para_id, index });
+					Ok(())
+				}
+			})?;
+			Ok(())
+		}
+
+		/// Suspends execution of deferred XCM for the XCMP queue, regardless of the sender's origin.
+		///
+		/// - `origin`: Must pass `ControllerOrigin`.
+		#[pallet::call_index(12)]
+		#[pallet::weight((T::DbWeight::get().writes(1), DispatchClass::Operational,))]
+		pub fn suspend_deferred_execution(origin: OriginFor<T>) -> DispatchResult {
+			T::ControllerOrigin::ensure_origin(origin)?;
+
+			DeferredQueueSuspended::<T>::put(true);
+
+			Ok(())
+		}
+
+		/// Resumes execution of deferred XCM for the XCMP queue.
+		///
+		/// Note that this function doesn't change the status of the in/out bound channels.
+		///
+		/// - `origin`: Must pass `ControllerOrigin`.
+		#[pallet::call_index(13)]
+		#[pallet::weight((T::DbWeight::get().writes(1), DispatchClass::Operational,))]
+		pub fn resume_deferred_execution(origin: OriginFor<T>) -> DispatchResult {
+			T::ControllerOrigin::ensure_origin(origin)?;
+
+			DeferredQueueSuspended::<T>::put(false);
+
+			Ok(())
+		}
+
+		/// Set whether to defer all incoming XCMs (`Some(deferral_time)`) or not (`None`).
+		///
+		/// - `origin`: Must pass `ControllerOrigin`.
+		#[pallet::call_index(14)]
+		#[pallet::weight((T::DbWeight::get().writes(1), DispatchClass::Operational,))]
+		pub fn set_defer_all_by(origin: OriginFor<T>, maybe_defer_by: Option<u32>) -> DispatchResult {
+			T::ControllerOrigin::ensure_origin(origin)?;
+
+			DeferAllBy::<T>::mutate_exists(|d| { *d = maybe_defer_by; });
+
+			Ok(())
+		}
 	}
 
 	#[pallet::event]
@@ -301,6 +484,32 @@ pub mod pallet {
 		},
 		/// An XCM from the overweight queue was executed with the given actual weight used.
 		OverweightServiced { index: OverweightIndex, used: Weight },
+		/// Some XCM was deferred for later execution
+		XcmDeferred {
+			sender: ParaId,
+			sent_at: RelayBlockNumber,
+			deferred_to: RelayBlockNumber,
+			index: DeferredIndex,
+			position: u32,
+			message_hash: Option<XcmHash>,
+		},
+		/// The deferred queue is full with xcm messages
+		XcmDeferredQueueFull {
+			sender: ParaId,
+			sent_at: RelayBlockNumber,
+			message_hash: Option<XcmHash>,
+		},
+		/// The deferred message was successfully discarded.
+		DeferredXcmDiscarded {
+			sender: ParaId,
+			sent_at: RelayBlockNumber,
+			deferred_to: RelayBlockNumber,
+			index: DeferredIndex,
+			position: u32,
+			message_hash: Option<XcmHash>,
+		},
+		/// The deferred bucket was discarded.
+		DeferredBucketDiscarded { sender: ParaId, index: DeferredIndex },
 	}
 
 	#[pallet::error]
@@ -315,6 +524,8 @@ pub mod pallet {
 		BadOverweightIndex,
 		/// Provided weight is possibly not enough to execute the message.
 		WeightOverLimit,
+		/// Indicated message is not present.
+		MessageNotFound,
 	}
 
 	/// Status of the inbound XCMP channels.
@@ -331,6 +542,28 @@ pub mod pallet {
 		Twox64Concat,
 		RelayBlockNumber,
 		Vec<u8>,
+		ValueQuery,
+	>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn deferred_indices)]
+	pub(super) type DeferredIndices<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		ParaId,
+		BoundedBTreeSet<DeferredIndex, T::MaxDeferredBuckets>,
+		ValueQuery,
+	>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn messages_deferred_to)]
+	pub(super) type DeferredMessageBuckets<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		ParaId,
+		Blake2_128Concat,
+		DeferredIndex,
+		BoundedVec<Option<DeferredMessage<T::RuntimeCall>>, T::MaxDeferredMessages>,
 		ValueQuery,
 	>;
 
@@ -375,6 +608,14 @@ pub mod pallet {
 	/// Whether or not the XCMP queue is suspended from executing incoming XCMs or not.
 	#[pallet::storage]
 	pub(super) type QueueSuspended<T: Config> = StorageValue<_, bool, ValueQuery>;
+
+	/// Whether or not the Deferred queue is suspended from executing XCMs or not.
+	#[pallet::storage]
+	pub(super) type DeferredQueueSuspended<T: Config> = StorageValue<_, bool, ValueQuery>;
+
+	/// Whether or not and if so by how much to defer all incoming XCMs.
+	#[pallet::storage]
+	pub(super) type DeferAllBy<T: Config> = StorageValue<_, u32>;
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, TypeInfo)]
@@ -517,7 +758,7 @@ impl<T: Config> Pallet<T> {
 		let max_message_size =
 			T::ChannelInfo::get_channel_max(recipient).ok_or(MessageSendError::NoChannel)?;
 		if data.len() > max_message_size {
-			return Err(MessageSendError::TooBig)
+			return Err(MessageSendError::TooBig);
 		}
 
 		let mut s = <OutboundXcmpStatus<T>>::get();
@@ -528,18 +769,18 @@ impl<T: Config> Pallet<T> {
 			s.last_mut().expect("can't be empty; a new element was just pushed; qed")
 		};
 		let have_active = details.last_index > details.first_index;
-		let appended = have_active &&
-			<OutboundXcmpMessages<T>>::mutate(recipient, details.last_index - 1, |s| {
-				if XcmpMessageFormat::decode_with_depth_limit(MAX_XCM_DECODE_DEPTH, &mut &s[..]) !=
-					Ok(format)
+		let appended = have_active
+			&& <OutboundXcmpMessages<T>>::mutate(recipient, details.last_index - 1, |s| {
+				if XcmpMessageFormat::decode_with_depth_limit(MAX_XCM_DECODE_DEPTH, &mut &s[..])
+					!= Ok(format)
 				{
-					return false
+					return false;
 				}
 				if s.len() + data.len() > max_message_size {
-					return false
+					return false;
 				}
 				s.extend_from_slice(&data[..]);
-				return true
+				return true;
 			});
 		if appended {
 			Ok((details.last_index - details.first_index - 1) as u32)
@@ -617,12 +858,12 @@ impl<T: Config> Pallet<T> {
 	fn handle_xcm_message(
 		sender: ParaId,
 		_sent_at: RelayBlockNumber,
-		xcm: VersionedXcm<T::RuntimeCall>,
+		versioned_xcm: VersionedXcm<T::RuntimeCall>,
 		max_weight: Weight,
 	) -> Result<Weight, XcmError> {
-		let hash = xcm.using_encoded(sp_io::hashing::blake2_256);
+		let hash = versioned_xcm.using_encoded(sp_io::hashing::blake2_256);
 		log::debug!("Processing XCMP-XCM: {:?}", &hash);
-		let (result, event) = match Xcm::<T::RuntimeCall>::try_from(xcm) {
+		let (result, event) = match Xcm::<T::RuntimeCall>::try_from(versioned_xcm.clone()) {
 			Ok(xcm) => {
 				let location = (Parent, Parachain(sender.into()));
 
@@ -631,16 +872,19 @@ impl<T: Config> Pallet<T> {
 						Err(e),
 						Event::Fail { message_hash: Some(hash), error: e, weight: Weight::zero() },
 					),
-					Outcome::Complete(w) =>
-						(Ok(w), Event::Success { message_hash: Some(hash), weight: w }),
+					Outcome::Complete(w) => {
+						(Ok(w), Event::Success { message_hash: Some(hash), weight: w })
+					},
 					// As far as the caller is concerned, this was dispatched without error, so
 					// we just report the weight used.
-					Outcome::Incomplete(w, e) =>
-						(Ok(w), Event::Fail { message_hash: Some(hash), error: e, weight: w }),
+					Outcome::Incomplete(w, e) => {
+						(Ok(w), Event::Fail { message_hash: Some(hash), error: e, weight: w })
+					},
 				}
 			},
-			Err(()) =>
-				(Err(XcmError::UnhandledXcmVersion), Event::BadVersion { message_hash: Some(hash) }),
+			Err(()) => {
+				(Err(XcmError::UnhandledXcmVersion), Event::BadVersion { message_hash: Some(hash) })
+			},
 		};
 		Self::deposit_event(event);
 		result
@@ -653,64 +897,103 @@ impl<T: Config> Pallet<T> {
 		max_weight: Weight,
 		max_individual_weight: Weight,
 	) -> (Weight, bool) {
+		let mut weight_used = Weight::zero();
 		let data = <InboundXcmpMessages<T>>::get(sender, sent_at);
 		let mut last_remaining_fragments;
 		let mut remaining_fragments = &data[..];
-		let mut weight_used = Weight::zero();
 		match format {
 			XcmpMessageFormat::ConcatenatedVersionedXcm => {
-				while !remaining_fragments.is_empty() &&
-					*messages_processed < MAX_MESSAGES_PER_BLOCK
+				while !remaining_fragments.is_empty()
+					&& *messages_processed < MAX_MESSAGES_PER_BLOCK
 				{
 					last_remaining_fragments = remaining_fragments;
 					if let Ok(xcm) = VersionedXcm::<T::RuntimeCall>::decode_with_depth_limit(
 						MAX_XCM_DECODE_DEPTH,
 						&mut remaining_fragments,
 					) {
-						let weight = max_weight - weight_used;
-						*messages_processed += 1;
-						match Self::handle_xcm_message(sender, sent_at, xcm, weight) {
-							Ok(used) => weight_used = weight_used.saturating_add(used),
-							Err(XcmError::WeightLimitReached(required))
-								if required.any_gt(max_individual_weight) =>
-							{
-								let is_under_limit =
-									Overweight::<T>::count() < MAX_OVERWEIGHT_MESSAGES;
-								weight_used.saturating_accrue(T::DbWeight::get().reads(1));
-								if is_under_limit {
-									// overweight - add to overweight queue and continue with message
-									// execution consuming the message.
-									let msg_len = last_remaining_fragments
-										.len()
-										.saturating_sub(remaining_fragments.len());
-									let overweight_xcm =
-										last_remaining_fragments[..msg_len].to_vec();
-									let index =
-										Self::stash_overweight(sender, sent_at, overweight_xcm);
-									let e = Event::OverweightEnqueued {
-										sender,
-										sent_at,
-										index,
-										required,
-									};
-									Self::deposit_event(e);
-								}
-							},
-							Err(XcmError::WeightLimitReached(required))
-								if required.all_lte(max_weight) =>
-							{
-								// That message didn't get processed this time because of being
-								// too heavy. We leave it around for next time and bail.
-								remaining_fragments = last_remaining_fragments;
-								break
-							},
-							Err(error) => {
-								log::error!(
-									"Failed to process XCMP-XCM message, caused by {:?}",
-									error
-								);
-								// Message looks invalid; don't attempt to retry
-							},
+						let (defer_weight, defer) = if let Some(defer) = DeferAllBy::<T>::get() {
+							(Weight::zero(), Some(defer))
+						} else {
+							T::XcmDeferFilter::deferred_by(sender, sent_at, &xcm)
+						};
+						weight_used.saturating_accrue(defer_weight);
+						let weight = max_weight.saturating_sub(weight_used);
+						if let Some(defer_by) = defer {
+							let relay_block =
+								T::RelayChainBlockNumberProvider::current_block_number();
+							let deferred_to = relay_block.saturating_add(defer_by);
+
+							let hash = xcm.using_encoded(sp_io::hashing::blake2_256);
+							weight_used.saturating_accrue(T::WeightInfo::try_place_in_deferred_queue());
+							let _ = Self::try_place_in_deferred_queue(
+								sender,
+								deferred_to,
+								DeferredMessage { sender, xcm, sent_at, deferred_to },
+							)
+							.map(|(index, position)| {
+								let e = Event::XcmDeferred {
+									sender,
+									sent_at,
+									deferred_to,
+									index,
+									position,
+									message_hash: Some(hash),
+								};
+								Self::deposit_event(e);
+							})
+							.map_err(|()| {
+								log::warn!("Deferred XCM queue full. Dropping message.");
+								Self::deposit_event(Event::XcmDeferredQueueFull {
+									sender,
+									sent_at,
+									message_hash: Some(hash),
+								});
+							});
+						} else {
+							*messages_processed += 1;
+							match Self::handle_xcm_message(sender, sent_at, xcm, weight) {
+								Ok(used) => weight_used = weight_used.saturating_add(used),
+								Err(XcmError::WeightLimitReached(required))
+									if required.any_gt(max_individual_weight) =>
+								{
+									let is_under_limit =
+										Overweight::<T>::count() < MAX_OVERWEIGHT_MESSAGES;
+									weight_used.saturating_accrue(T::DbWeight::get().reads(1));
+									if is_under_limit {
+										// overweight - add to overweight queue and continue with message
+										// execution consuming the message.
+										let msg_len = last_remaining_fragments
+											.len()
+											.saturating_sub(remaining_fragments.len());
+										let overweight_xcm =
+											last_remaining_fragments[..msg_len].to_vec();
+										let index =
+											Self::stash_overweight(sender, sent_at, overweight_xcm);
+										let e = Event::OverweightEnqueued {
+											sender,
+											sent_at,
+											index,
+											required,
+										};
+										Self::deposit_event(e);
+									}
+								},
+								Err(XcmError::WeightLimitReached(required))
+									if required.all_lte(max_weight) =>
+								{
+									// That message didn't get processed this time because of being
+									// too heavy. We leave it around for next time and bail.
+									remaining_fragments = last_remaining_fragments;
+									break;
+								},
+								Err(error) => {
+									log::error!(
+										"Failed to process XCMP-XCM message, caused by {:?}",
+										error
+									);
+									// Message looks invalid; don't attempt to retry
+								},
+							}
 						}
 					} else {
 						debug_assert!(false, "Invalid incoming XCMP message data");
@@ -731,7 +1014,7 @@ impl<T: Config> Pallet<T> {
 								// That message didn't get processed this time because of being
 								// too heavy. We leave it around for next time and bail.
 								remaining_fragments = last_remaining_fragments;
-								break
+								break;
 							},
 							Err(false) => {
 								// Message invalid; don't attempt to retry
@@ -773,6 +1056,19 @@ impl<T: Config> Pallet<T> {
 		index
 	}
 
+	fn service_queues(
+		max_weight: Weight,
+		relay_block_number: RelayBlockNumber,
+		max_individual_weight: Weight,
+	) -> Weight {
+		let weight_used = Self::service_xcmp_queue(max_weight, 0);
+		weight_used.saturating_add(Self::service_deferred_queues(
+			max_weight.saturating_sub(weight_used),
+			relay_block_number,
+			max_individual_weight,
+		))
+	}
+
 	/// Service the incoming XCMP message queue attempting to execute up to `max_weight` execution
 	/// weight of messages.
 	///
@@ -800,13 +1096,12 @@ impl<T: Config> Pallet<T> {
 	/// half of the `max_weight` available for the first page, then a quarter plus the remainder
 	/// for the second &c. though empirical and or practical factors may give rise to adjusting it
 	/// further.
-	fn service_xcmp_queue(max_weight: Weight) -> Weight {
+	fn service_xcmp_queue(max_weight: Weight, mut messages_processed: u8) -> Weight {
 		let suspended = QueueSuspended::<T>::get();
-		let mut messages_processed = 0;
 
 		let mut status = <InboundXcmpStatus<T>>::get(); // <- sorted.
 		if status.is_empty() {
-			return Weight::zero()
+			return Weight::zero();
 		}
 
 		let QueueConfigData {
@@ -830,9 +1125,9 @@ impl<T: Config> Pallet<T> {
 		// send more, heavier messages.
 
 		let mut shuffle_index = 0;
-		while shuffle_index < shuffled.len() &&
-			max_weight.saturating_sub(weight_used).all_gte(threshold_weight) &&
-			messages_processed < MAX_MESSAGES_PER_BLOCK
+		while shuffle_index < shuffled.len()
+			&& max_weight.saturating_sub(weight_used).all_gte(threshold_weight)
+			&& messages_processed < MAX_MESSAGES_PER_BLOCK
 		{
 			let index = shuffled[shuffle_index];
 			let sender = status[index].sender;
@@ -845,7 +1140,7 @@ impl<T: Config> Pallet<T> {
 
 			if suspended && !is_controller {
 				shuffle_index += 1;
-				continue
+				continue;
 			}
 
 			if weight_available != max_weight {
@@ -869,9 +1164,20 @@ impl<T: Config> Pallet<T> {
 			} else {
 				// Process up to one block's worth for now.
 				let weight_remaining = weight_available.saturating_sub(weight_used);
+
+				let (sent_at, format) = status[index].message_metadata[0];
+
+				let weight_used_for_queue = Self::service_deferred_queue(
+					sender,
+					weight_remaining,
+					sent_at,
+					xcmp_max_individual_weight,
+				);
+				let weight_remaining = weight_remaining.saturating_sub(weight_used_for_queue);
+
 				let (weight_processed, is_empty) = Self::process_xcmp_message(
 					sender,
-					status[index].message_metadata[0],
+					(sent_at, format),
 					&mut messages_processed,
 					weight_remaining,
 					xcmp_max_individual_weight,
@@ -879,12 +1185,12 @@ impl<T: Config> Pallet<T> {
 				if is_empty {
 					status[index].message_metadata.remove(0);
 				}
-				weight_processed
+				weight_processed.saturating_add(weight_used_for_queue)
 			};
 			weight_used += weight_processed;
 
-			if status[index].message_metadata.len() as u32 <= resume_threshold &&
-				status[index].state == InboundState::Suspended
+			if status[index].message_metadata.len() as u32 <= resume_threshold
+				&& status[index].state == InboundState::Suspended
 			{
 				// Resume
 				let r = Self::send_signal(sender, ChannelSignal::Resume);
@@ -895,12 +1201,12 @@ impl<T: Config> Pallet<T> {
 			// If there are more and we're making progress, we process them after we've given the
 			// other channels a look in. If we've still not unlocked all weight, then we set them
 			// up for processing a second time anyway.
-			if !status[index].message_metadata.is_empty() &&
-				(weight_processed.any_gt(Weight::zero()) || weight_available != max_weight)
+			if !status[index].message_metadata.is_empty()
+				&& (weight_processed.any_gt(Weight::zero()) || weight_available != max_weight)
 			{
 				if shuffle_index + 1 == shuffled.len() {
 					// Only this queue left. Just run around this loop once more.
-					continue
+					continue;
 				}
 				shuffled.push(index);
 			}
@@ -911,6 +1217,176 @@ impl<T: Config> Pallet<T> {
 		status.retain(|item| !item.message_metadata.is_empty());
 
 		<InboundXcmpStatus<T>>::put(status);
+		weight_used
+	}
+
+	/// Process the deferred messages for all deferred queues up to the relay chain block number and max weight.
+	fn service_deferred_queues(
+		max_weight: Weight,
+		relay_chain_block_number: RelayBlockNumber,
+		max_individual_weight: Weight,
+	) -> Weight {
+		let mut weight_used = Weight::zero();
+		if QueueSuspended::<T>::get() || DeferredQueueSuspended::<T>::get() {
+			return weight_used;
+		}
+		let mut keys = DeferredIndices::<T>::iter_keys();
+		let mut processed_all_queues = false;
+		while !processed_all_queues && max_weight.all_gt(weight_used) {
+			if let Some(sender) = keys.next() {
+				weight_used.saturating_accrue(Self::service_deferred_queue(
+					sender,
+					max_weight.saturating_sub(weight_used),
+					relay_chain_block_number,
+					max_individual_weight,
+				));
+			} else {
+				processed_all_queues = true;
+			}
+		}
+
+		weight_used
+	}
+
+	/// Process the deferred messages for a single queue up to the relay chain block number and max weight.
+	fn service_deferred_queue(
+		sender: ParaId,
+		max_weight: Weight,
+		up_to_relay_block_number: RelayBlockNumber,
+		max_individual_weight: Weight,
+	) -> Weight {
+		let mut weight_used = Weight::zero();
+		if QueueSuspended::<T>::get() || DeferredQueueSuspended::<T>::get() {
+			return weight_used;
+		}
+
+		weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
+		let mut indices = DeferredIndices::<T>::take(sender);
+
+		let indices_to_process =
+			indices.range((Included(&(0, 0)), Included(&(up_to_relay_block_number, u16::MAX))));
+		let mut processed = BTreeSet::new();
+		for index in indices_to_process {
+			weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
+			if weight_used.any_gte(max_weight) {
+				break;
+			}
+			let remove = DeferredMessageBuckets::<T>::mutate(sender, index, |bucket| {
+				weight_used.saturating_accrue(Self::process_deferred_messages(
+					sender,
+					bucket,
+					max_weight.saturating_sub(weight_used),
+					max_individual_weight,
+				));
+				bucket.is_empty() || bucket.iter().all(|maybe_msg| maybe_msg.is_none())
+			});
+			if remove {
+				DeferredMessageBuckets::<T>::remove(sender, index);
+				processed.insert(*index);
+			}
+		}
+		indices = BoundedBTreeSet::try_from(indices.into_inner().sub(&processed))
+			.expect("Subtraction can only lead to a smaller set. qed.");
+		if !indices.is_empty() {
+			DeferredIndices::<T>::insert(sender, indices);
+		}
+
+		weight_used
+	}
+
+	/// Try to place a message in the deferred queue for `sender`.
+	/// Returns the index and position where the message was stored.
+	fn try_place_in_deferred_queue(
+		sender: ParaId,
+		deferred_to: RelayBlockNumber,
+		deferred_message: DeferredMessage<T::RuntimeCall>,
+	) -> Result<(DeferredIndex, u32), ()> {
+		DeferredIndices::<T>::try_mutate(sender, |indices| {
+			let first_index_in_block = (deferred_to, 0_u16);
+			let (index, do_insert) = indices
+				.range((Included(&first_index_in_block), Included(&(deferred_to, u16::MAX))))
+				.max()
+				.map(|index| (*index, false))
+				.unwrap_or((first_index_in_block, true));
+			if do_insert {
+				// no bucket yet for block `deferred_to`, create new one
+				indices.try_insert(index).map_err(|_| ())?;
+			}
+			let deferred_message = Some(deferred_message);
+			let position =
+				DeferredMessageBuckets::<T>::decode_len(sender, index).unwrap_or(0) as u32;
+			let index_and_pos = if DeferredMessageBuckets::<T>::try_append(
+				sender,
+				index,
+				&deferred_message,
+			)
+			.is_ok()
+			{
+				(index, position)
+			} else {
+				// last bucket is full, create new one
+				let (deferred_to, block_index) = index;
+				let new_index = (deferred_to, block_index.checked_add(1).ok_or(())?);
+				indices.try_insert(new_index).map_err(|_| ())?;
+				let _ =
+					DeferredMessageBuckets::<T>::try_append(sender, new_index, &deferred_message)
+						.defensive_proof("appending to empty bucket should not fail");
+				(new_index, 0)
+			};
+			Ok(index_and_pos)
+		})
+	}
+
+	/// Process `deferred_messages` from `sender` that were deferred until `relay_chain_block`
+	/// Returns the `weight_used` and removes processed messages from the `deferred_messages` vector.
+	fn process_deferred_messages(
+		sender: ParaId,
+		deferred_messages: &mut BoundedVec<
+			Option<DeferredMessage<T::RuntimeCall>>,
+			T::MaxDeferredMessages,
+		>,
+		max_weight: Weight,
+		max_individual_weight: Weight,
+	) -> Weight {
+		let mut weight_used = Weight::zero();
+
+		for maybe_msg in deferred_messages.iter_mut() {
+			let weight = max_weight.saturating_sub(weight_used);
+			if weight.any_eq(Weight::zero()) {
+				break;
+			}
+
+			let Some(msg) = maybe_msg else { continue };
+			match Self::handle_xcm_message(sender, msg.sent_at, msg.xcm.clone(), weight) {
+				Ok(used) => {
+					weight_used.saturating_accrue(used);
+					*maybe_msg = None;
+				},
+				Err(XcmError::WeightLimitReached(required))
+					if required.any_gt(max_individual_weight) =>
+				{
+					let is_under_limit = Overweight::<T>::count() < MAX_OVERWEIGHT_MESSAGES;
+					weight_used.saturating_accrue(T::DbWeight::get().reads(1));
+					if is_under_limit {
+						// overweight - add to overweight queue and continue with message
+						// execution consuming the message.
+						let overweight_xcm = msg.xcm.encode();
+						let index = Self::stash_overweight(sender, msg.sent_at, overweight_xcm);
+						let e = Event::OverweightEnqueued {
+							sender,
+							sent_at: msg.sent_at,
+							index,
+							required,
+						};
+						Self::deposit_event(e);
+					}
+					*maybe_msg = None;
+				},
+				Err(XcmError::WeightLimitReached(_)) => {},
+				Err(_) => *maybe_msg = None,
+			}
+		}
+
 		weight_used
 	}
 
@@ -944,6 +1420,34 @@ impl<T: Config> Pallet<T> {
 			}
 		});
 	}
+
+	/// Inject arbitrary deferred messages to the queue
+	#[cfg(any(test, feature = "runtime-benchmarks"))]
+	fn inject_deferred_messages(
+		sender: ParaId,
+		index: DeferredIndex,
+		messages: BoundedVec<DeferredMessage<T::RuntimeCall>, T::MaxDeferredMessages>,
+	) {
+		DeferredIndices::<T>::mutate(sender, |indices| {
+			indices.try_insert(index).expect("Should not inject too many messages.");
+		});
+		let messages: Vec<_> = messages.into_iter().map(|msg| Some(msg)).collect();
+		let messages = BoundedVec::try_from(messages).expect("Length was not changed. qed.");
+		DeferredMessageBuckets::<T>::mutate(sender, index, |deferred_messages| {
+			*deferred_messages = messages
+		});
+	}
+
+	/// Inject arbitrary indices.
+	/// WARNING: leads to inconsistent state.
+	#[cfg(any(test, feature = "runtime-benchmarks"))]
+	fn inject_bare_deferred_indices(sender: ParaId, insert: Vec<DeferredIndex>) {
+		DeferredIndices::<T>::mutate(sender, |indices| {
+			for index in insert.into_iter() {
+				indices.try_insert(index).expect("Should not inject too many indices.");
+			}
+		});
+	}
 }
 
 impl<T: Config> XcmpMessageHandler for Pallet<T> {
@@ -951,9 +1455,12 @@ impl<T: Config> XcmpMessageHandler for Pallet<T> {
 		iter: I,
 		max_weight: Weight,
 	) -> Weight {
+		let mut last_block_number = 0;
 		let mut status = <InboundXcmpStatus<T>>::get();
 
-		let QueueConfigData { suspend_threshold, drop_threshold, .. } = <QueueConfig<T>>::get();
+		let QueueConfigData {
+			suspend_threshold, drop_threshold, xcmp_max_individual_weight, ..
+		} = <QueueConfig<T>>::get();
 
 		for (sender, sent_at, data) in iter {
 			// Figure out the message format.
@@ -965,7 +1472,7 @@ impl<T: Config> XcmpMessageHandler for Pallet<T> {
 				Ok(f) => f,
 				Err(_) => {
 					debug_assert!(false, "Unknown XCMP message format. Silently dropping message");
-					continue
+					continue;
 				},
 			};
 			if format == XcmpMessageFormat::Signals {
@@ -1010,14 +1517,16 @@ impl<T: Config> XcmpMessageHandler for Pallet<T> {
 				// Queue the payload for later execution.
 				<InboundXcmpMessages<T>>::insert(sender, sent_at, data_ref);
 			}
-
+			if last_block_number < sent_at {
+				last_block_number = sent_at;
+			};
 			// Optimization note; it would make sense to execute messages immediately if
 			// `status.is_empty()` here.
 		}
 		status.sort();
 		<InboundXcmpStatus<T>>::put(status);
 
-		Self::service_xcmp_queue(max_weight)
+		Self::service_queues(max_weight, last_block_number, xcmp_max_individual_weight)
 	}
 }
 
@@ -1040,10 +1549,10 @@ impl<T: Config> XcmpMessageSource for Pallet<T> {
 			if result.len() == max_message_count {
 				// We check this condition in the beginning of the loop so that we don't include
 				// a message where the limit is 0.
-				break
+				break;
 			}
 			if outbound_state == OutboundState::Suspended {
-				continue
+				continue;
 			}
 			let (max_size_now, max_size_ever) = match T::ChannelInfo::get_channel_status(para_id) {
 				ChannelStatus::Closed => {
@@ -1056,7 +1565,7 @@ impl<T: Config> XcmpMessageSource for Pallet<T> {
 						<SignalMessages<T>>::remove(para_id);
 					}
 					*status = OutboundChannelDetails::new(para_id);
-					continue
+					continue;
 				},
 				ChannelStatus::Full => continue,
 				ChannelStatus::Ready(n, e) => (n, e),
@@ -1069,7 +1578,7 @@ impl<T: Config> XcmpMessageSource for Pallet<T> {
 					signals_exist = false;
 					page
 				} else {
-					continue
+					continue;
 				}
 			} else if last_index > first_index {
 				let page = <OutboundXcmpMessages<T>>::get(para_id, first_index);
@@ -1078,10 +1587,10 @@ impl<T: Config> XcmpMessageSource for Pallet<T> {
 					first_index += 1;
 					page
 				} else {
-					continue
+					continue;
 				}
 			} else {
-				continue
+				continue;
 			};
 			if first_index == last_index {
 				first_index = 0;
