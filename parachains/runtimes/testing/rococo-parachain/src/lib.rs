@@ -482,6 +482,11 @@ impl cumulus_pallet_xcmp_queue::Config for Runtime {
 	type ControllerOriginConverter = XcmOriginToTransactDispatchOrigin;
 	type WeightInfo = cumulus_pallet_xcmp_queue::weights::SubstrateWeight<Runtime>;
 	type PriceForSiblingDelivery = ();
+	type ExecuteDeferredOrigin = EnsureRoot<AccountId>;
+	type XcmDeferFilter = ();
+	type MaxDeferredMessages = ConstU32<10>;
+	type MaxDeferredBuckets = ConstU32<10>;
+	type RelayChainBlockNumberProvider = cumulus_pallet_parachain_system::RelaychainBlockNumberProvider<Runtime>;
 }
 
 impl cumulus_pallet_dmp_queue::Config for Runtime {
